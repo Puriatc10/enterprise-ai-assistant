@@ -91,6 +91,7 @@ Postgres for *connector* work in Phase 4, add it there — never as the applicat
 | CORS error in the browser | origin not in `API_CORS_ORIGINS` | add it, restart the API |
 | `uv sync` fails resolving a package | network/resolver | retry; if the host blocks a registry, configure a mirror rather than pinning odd versions |
 | Compose build cannot find files | build context is the repo root | Dockerfiles copy from repo-root paths; run compose from the root |
+| `docker compose build` fails or hangs at `registry-1.docker.io` | Docker Hub is unreachable from this network (observed: HTTP 403, then a pull that never completes) | configure a registry mirror in Docker Desktop (Settings → Docker Engine → `registry-mirrors`) or build where Docker Hub is reachable. Until then the Dockerfiles are **unvalidated by execution**; `docker compose config` still validates the compose file itself. |
 
 ## Conventions worth repeating
 

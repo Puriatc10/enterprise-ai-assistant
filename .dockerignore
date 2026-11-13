@@ -1,0 +1,31 @@
+# Build context is the repository root (see docker-compose.yml). Keep the context
+# small: only each Dockerfile's COPY targets matter, everything else is noise.
+.git/
+.gitignore
+.hermes/
+.vscode/
+.idea/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/*.egg-info/
+
+# Node
+**/node_modules/
+**/dist/
+
+# Docs and local config never belong in an image
+docs/
+*.md
+.env
+.env.*
+!**/.env.example
+
+# Per-app ignore files are kept for when an app dir is used as its own context
+**/Dockerfile
+**/.dockerignore

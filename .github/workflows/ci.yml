@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One run per ref: a new push supersedes an in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  api:
+    name: api · lint + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Install dependencies (locked)
+        run: uv sync --frozen --python ${{ env.PYTHON_VERSION }}
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Tests
+        run: uv run pytest
+
+      # The Dockerfile installs with plain pip, not uv. Verify that exact path
+      # works, so a broken build backend is caught here rather than in the image.
+      - name: Package installs cleanly with pip
+        run: |
+          python -m venv "$RUNNER_TEMP/pkgcheck"
+          "$RUNNER_TEMP/pkgcheck/bin/python" -m pip install --quiet --upgrade pip
+          "$RUNNER_TEMP/pkgcheck/bin/python" -m pip install --quiet .
+          "$RUNNER_TEMP/pkgcheck/bin/python" -c "from app.main import app; print('import ok:', app.title)"
+
+  web:
+    name: web · typecheck + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies (locked)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # Everything with a VITE_ prefix ends up in a public bundle. Fail the build
+      # if a credential-shaped string ever reaches dist/.
+      - name: No secrets in the production bundle
+        run: |
+          if grep -rEI "AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9]{20,}|service_role|SUPABASE_SERVICE" dist/; then
+            echo "::error::Credential-shaped string found in the built bundle"
+            exit 1
+          fi
+          echo "bundle clean"
+
+  docker:
+    name: docker · build images + smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Validate compose file
+        run: docker compose config -q
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          load: true
+          tags: enterprise-ai-assistant-api:ci
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          load: true
+          tags: enterprise-ai-assistant-web:ci
+          build-args: |
+            VITE_API_BASE_URL=http://localhost:8000
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      # The point of this job: prove the image runs with no credentials at all.
+      - name: API container serves /health without credentials
+        run: |
+          set -euo pipefail
+          docker run -d --name api-smoke -p 8000:8000 enterprise-ai-assistant-api:ci
+          trap 'docker logs api-smoke || true; docker rm -f api-smoke || true' EXIT
+
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health -o "$RUNNER_TEMP/health.json"; then break; fi
+            sleep 2
+          done
+
+          test -s "$RUNNER_TEMP/health.json" || { echo "::error::API container never answered /health"; exit 1; }
+          cat "$RUNNER_TEMP/health.json"
+          python3 -c 'import json,os; d=json.load(open(os.environ["RUNNER_TEMP"]+"/health.json")); assert d["status"]=="ok", d; assert d["llm"]["configured"] is False, d; print("health ok, llm correctly reported as unconfigured")'
+
+      - name: Web container serves the built page
+        run: |
+          set -euo pipefail
+          docker run -d --name web-smoke -p 8080:80 enterprise-ai-assistant-web:ci
+          trap 'docker logs web-smoke || true; docker rm -f web-smoke || true' EXIT
+
+          for _ in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:8080/ -o "$RUNNER_TEMP/index.html"; then break; fi
+            sleep 1
+          done
+
+          grep -q "<title>Enterprise AI Assistant</title>" "$RUNNER_TEMP/index.html"
+          echo "static page served"

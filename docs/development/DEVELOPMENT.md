@@ -75,6 +75,10 @@ docker compose down
 No database container: persistence is Supabase (managed). If you need a throwaway
 Postgres for *connector* work in Phase 4, add it there — never as the application store.
 
+`docker compose config` validates the compose file; only a real `docker compose build`
+validates the Dockerfiles. Both images are built and smoke-tested in CI (`.github/
+workflows/ci.yml`), which is the authoritative check when a local registry is blocked.
+
 ## Configuration rules
 
 - Settings are defined once, in `app/core/config.py` (Pydantic Settings).

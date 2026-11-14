@@ -1,5 +1,7 @@
 # Enterprise AI Assistant
 
+[![CI](https://github.com/Puriatc10/enterprise-ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/Puriatc10/enterprise-ai-assistant/actions/workflows/ci.yml)
+
 A web-based enterprise assistant that answers natural-language questions about data
 spread across multiple organizational systems — by calling narrowly scoped, read-only
 tools and composing the answer from what those tools actually returned.
@@ -206,6 +208,20 @@ the application database is logically separate from connector data sources.
 | Frontend typecheck | `cd apps/web && npm run typecheck` |
 | Frontend build | `cd apps/web && npm run build` |
 | Whole stack | `docker compose up --build` |
+
+### Continuous integration
+
+Every push to `main` and every pull request runs `.github/workflows/ci.yml` on GitHub
+Actions:
+
+| Job | What it proves |
+|---|---|
+| `api` | locked install on Python 3.12, ruff lint + format, pytest, and that the project still installs with plain `pip` (the path the container image uses) |
+| `web` | locked `npm ci`, TypeScript typecheck, production build, and no credential-shaped string in `dist/` |
+| `docker` | both images build, the compose file validates, the API container answers `/health` with **no** credentials, the web container serves the built page |
+
+The Docker job exists because image builds could not be run on the original development
+host (Docker Hub unreachable there); CI is where the container path is verified.
 
 ## Documentation
 

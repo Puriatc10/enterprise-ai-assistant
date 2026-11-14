@@ -328,8 +328,7 @@ def run_case(completion: Any, case: Case) -> CaseResult:
         elif "location is not supported" in lowered:
             message = (
                 "PROVIDER SETUP: the Gemini API refuses this client's region. Run the "
-                "llm-spike workflow on GitHub Actions instead. Provider said: "
-                + message[:220]
+                "llm-spike workflow on GitHub Actions instead. Provider said: " + message[:220]
             )
         result.error = message
         result.latency_ms = int((time.perf_counter() - started) * 1000)

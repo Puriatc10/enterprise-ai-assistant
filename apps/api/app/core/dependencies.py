@@ -18,8 +18,10 @@ from fastapi import Depends, HTTPException, Request, status
 from app.core.config import Settings, get_settings
 from app.domain.interfaces.llm import LLMPort
 from app.domain.interfaces.repository import ConversationRepository
+from app.domain.models.auth import AuthContext
 from app.infrastructure.llm.litellm_adapter import LiteLLMAdapter
 from app.infrastructure.persistence.supabase import SupabaseConversationRepository
+from app.security.auth import require_auth_context
 from app.security.tokens import JwksCache, SupabaseTokenVerifier, TokenVerifierConfig
 
 logger = logging.getLogger(__name__)
@@ -158,3 +160,6 @@ def get_conversation_repository(request: Request) -> ConversationRepository:
 
 #: Annotated dependency type for handlers: ``repo: ConversationRepositoryDep``.
 ConversationRepositoryDep = Annotated[ConversationRepository, Depends(get_conversation_repository)]
+
+#: Annotated dependency type for handlers: ``context: AuthContextDep``.
+AuthContextDep = Annotated[AuthContext, Depends(require_auth_context)]

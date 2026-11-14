@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
+from app.api.errors import RequestIDMiddleware, install_error_handlers
 from app.api.router import api_router
 from app.api.routes.health import SERVICE_NAME
 from app.core.config import Settings, get_settings
@@ -79,8 +80,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=resolved.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Accept"],
+        allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
+        expose_headers=["X-Request-ID"],
     )
+    # Order matters: request id first so error responses can echo it.
+    application.add_middleware(RequestIDMiddleware)
+
+    install_error_handlers(application)
 
     application.include_router(api_router)
     return application

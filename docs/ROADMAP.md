@@ -69,16 +69,25 @@ and a yes/no answer on Didar24. Any architecture change this forces goes through
 
 ---
 
-## Phase 2 — Backend Foundation
+## Phase 2 — Backend Foundation 🔄 (in progress)
 
-- Finalize module skeletons implied by Phase 1 findings.
-- **Supabase project + schema**: `conversations`, `messages`, `tool_invocations`; RLS on.
-- **Auth integration**: JWT verification against JWKS → `AuthContext`; dependency wired.
-- **Persistence adapter**: conversation/message repository behind a port.
-- **LLM port + LiteLLM adapter**: completion, tool-call normalization, timeouts, error
-  mapping; a fake adapter for tests.
-- **Conversation orchestration**: load history, single LLM round with no tools yet.
-- Error envelope and request-id middleware.
+- ✅ **Supabase dev project + schema**: `conversations`, `messages`, `tool_invocations`
+  with indexes, an `updated_at` trigger, RLS on all three, grants to `authenticated`
+  only. Verified live: `anon` is refused (`42501`) on every table, and the project's
+  JWKS publishes ES256 keys.
+- ✅ **Auth integration**: bearer token → `AuthContext` via JWKS (ES256/RS256 allowlist
+  checked before decoding, required `exp`/`sub`/`iss`/`aud`, key cache refreshed on an
+  unknown `kid`). Fails closed with `501` when unconfigured. 15 tests sign real tokens.
+- ✅ **Persistence adapter**: `ConversationRepository` port (scope comes from
+  `AuthContext`, never from arguments) with an in-memory adapter for tests and a
+  PostgREST adapter that **forwards the caller's token**, so RLS applies. No
+  `service_role` key is held anywhere.
+- ✅ **LLM port + LiteLLM adapter**: provider-neutral error taxonomy, adapter-owned
+  retries, sampling parameters optional; `FakeLLMAdapter` for scripted tests.
+- ⬜ **Conversation orchestration**: load history, one LLM round, persist both turns.
+- ⬜ **Error envelope + request-id middleware**: one consistent failure shape.
+- ⬜ **Authenticated end-to-end test**: needs a real login, which arrives with the
+  Phase 5 frontend (the negative paths are covered now).
 
 Exit criteria: an authenticated request can post a message and get a model answer
 persisted and replayed; tests run with no network and no real key.

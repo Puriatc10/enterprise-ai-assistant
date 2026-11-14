@@ -59,6 +59,13 @@ async def require_auth_context(request: Request) -> AuthContext:
         )
 
     try:
-        return await verifier.verify(token.strip())
+        context = await verifier.verify(token.strip())
     except AuthError as exc:
         raise _unauthorized(exc.reason, str(exc)) from exc
+
+    # Keep the raw token in *request* scope for adapters that must forward it (the
+    # PostgREST repository does, so RLS evaluates the real caller). It goes on
+    # `request.state`, never into `AuthContext`: the context is passed to services,
+    # tools and eventually prompt assembly, and a credential must not travel with it.
+    request.state.access_token = token.strip()
+    return context

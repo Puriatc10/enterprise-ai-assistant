@@ -13,11 +13,13 @@ from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
 import httpx
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request, status
 
 from app.core.config import Settings, get_settings
 from app.domain.interfaces.llm import LLMPort
+from app.domain.interfaces.repository import ConversationRepository
 from app.infrastructure.llm.litellm_adapter import LiteLLMAdapter
+from app.infrastructure.persistence.supabase import SupabaseConversationRepository
 from app.security.tokens import JwksCache, SupabaseTokenVerifier, TokenVerifierConfig
 
 logger = logging.getLogger(__name__)
@@ -121,3 +123,38 @@ def build_token_verifier(settings: Settings) -> SupabaseTokenVerifier | None:
             audience=settings.supabase_jwt_audience,
         ),
     )
+
+
+def get_conversation_repository(request: Request) -> ConversationRepository:
+    """Build a repository scoped to the caller of this request.
+
+    The caller's token is forwarded to PostgREST, so the database applies its own
+    row-level policies alongside the backend's scoping. That is why this is built per
+    request rather than cached on ``app.state``: the credential is per caller.
+
+    ``app.state.conversation_repository`` is an explicit override seam for tests and
+    for a local run with no database configured.
+    """
+    override = getattr(request.app.state, "conversation_repository", None)
+    if override is not None:
+        return override
+
+    settings = provide_settings(request)
+    access_token = getattr(request.state, "access_token", None)
+    if not settings.supabase_configured or not settings.supabase_url or not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Persistence is not configured (Supabase URL/key missing).",
+        )
+
+    anon_key = settings.supabase_anon_key
+    assert anon_key is not None  # guaranteed by supabase_configured  # noqa: S101
+    return SupabaseConversationRepository(
+        base_url=settings.supabase_url,
+        api_key=anon_key.get_secret_value(),
+        access_token=access_token,
+    )
+
+
+#: Annotated dependency type for handlers: ``repo: ConversationRepositoryDep``.
+ConversationRepositoryDep = Annotated[ConversationRepository, Depends(get_conversation_repository)]

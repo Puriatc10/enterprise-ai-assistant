@@ -7,6 +7,7 @@ directions, so nothing above ``infrastructure/llm`` sees a vendor payload.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -57,3 +58,31 @@ class LLMRequest(BaseModel):
     #: adapter maps or drops it per provider.
     temperature: float | None = None
     max_tokens: int | None = None
+
+
+class Conversation(BaseModel):
+    """A stored chat thread.
+
+    Deliberately carries no owner fields: the repository already scoped every read
+    and write to the caller, so re-exposing ``user_id`` here would tempt callers to
+    compare it themselves — the check that must never be re-implemented ad hoc.
+    """
+
+    id: str
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class StoredMessage(BaseModel):
+    """A persisted turn, with the identity the database assigned it."""
+
+    id: str
+    role: Role
+    content: str = ""
+    tool_call_id: str | None = None
+    created_at: datetime
+
+    def as_chat_message(self) -> ChatMessage:
+        """Project back into the provider-facing shape, dropping storage fields."""
+        return ChatMessage(role=self.role, content=self.content, tool_call_id=self.tool_call_id)

@@ -20,7 +20,13 @@ Usage:
     uv sync --extra llm
     uv run --extra llm python scripts/phase1_spike.py                 # all cases
     uv run --extra llm python scripts/phase1_spike.py --case 1         # one case
+    uv run --extra llm python scripts/phase1_spike.py \
+        --model openrouter/google/gemma-4-31b-it:free                  # another provider
     uv run --extra llm python scripts/phase1_spike.py --question "چند بیمه‌نامه دارم؟"
+
+The model is `--model`, then `LLM_MODEL`, then the built-in default — so switching
+provider is a flag, never an edit. The credential is looked up by provider prefix
+(`GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`).
 """
 
 from __future__ import annotations
@@ -34,9 +40,20 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-MODEL = os.getenv("LLM_MODEL", "gemini/gemini-3.5-flash-lite")
 MAX_TOOL_ROUNDS = 3
 TIMEOUT_SECONDS = 45.0
+
+#: Built-in default when neither `--model` nor `LLM_MODEL` is set.
+BUILTIN_DEFAULT_MODEL = "gemini/gemini-3.5-flash-lite"
+
+#: Which environment variable carries the credential for each LiteLLM prefix.
+#: Keeping this table here is the spike-sized version of the adapter's mapping.
+KEY_ENV_VARS: dict[str, tuple[str, ...]] = {
+    "gemini/": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "openrouter/": ("OPENROUTER_API_KEY",),
+    "groq/": ("GROQ_API_KEY",),
+    "openai/": ("OPENAI_API_KEY",),
+}
 
 # ---------------------------------------------------------------------------
 # Synthetic data only. These are fabricated policies; no real customer data may
@@ -225,22 +242,35 @@ def load_env_files() -> None:
             load_dotenv(candidate, override=False)
 
 
-def require_credentials() -> str | None:
-    """Return an API key if one is configured, else None (and say why)."""
-    key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if not key:
-        print(
-            "SKIP: no GEMINI_API_KEY / GOOGLE_API_KEY in the environment.\n"
-            "      The spike is designed to run hermetically; nothing was sent.\n"
-            "      To run it: put GEMINI_API_KEY=... in apps/api/.env, or dispatch the "
-            "`llm-spike` workflow with the repository secret set.",
-            file=sys.stderr,
-        )
-        return None
-    return key
+def resolve_model(explicit: str | None) -> str:
+    """`--model` beats `LLM_MODEL`, which beats the built-in default."""
+    return explicit or os.getenv("LLM_MODEL") or BUILTIN_DEFAULT_MODEL
 
 
-def run_case(completion: Any, case: Case) -> CaseResult:
+def required_key_names(model: str) -> tuple[str, ...]:
+    """Environment variables that could hold this model's credential."""
+    for prefix, names in KEY_ENV_VARS.items():
+        if model.startswith(prefix):
+            return names
+    return tuple(name for names in KEY_ENV_VARS.values() for name in names)
+
+
+def require_credentials(model: str) -> str | None:
+    """Return the env var name holding a key if one is set, else None (and say why)."""
+    for name in required_key_names(model):
+        if os.getenv(name):
+            return name
+    expected = " or ".join(required_key_names(model))
+    print(
+        f"SKIP: no credential found for {model}.\n"
+        f"      Set {expected} in apps/api/.env (or the environment) and re-run.\n"
+        "      Nothing was sent. Dispatch the `llm-spike` workflow to run it on the runner.",
+        file=sys.stderr,
+    )
+    return None
+
+
+def run_case(completion: Any, case: Case, model: str) -> CaseResult:
     """Drive one question through the tool loop and record what happened."""
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -260,7 +290,7 @@ def run_case(completion: Any, case: Case) -> CaseResult:
             # Phase 2's adapter must treat temperature as an optional, provider-
             # mapped parameter rather than a universally supported one.
             response = completion(
-                model=MODEL,
+                model=model,
                 messages=messages,
                 tools=TOOLS,
                 tool_choice="auto",
@@ -343,12 +373,17 @@ def main() -> int:
     parser.add_argument("--case", type=int, help="Run a single case by 1-based index.")
     parser.add_argument("--question", help="Ad-hoc question; runs one case with no expectation.")
     parser.add_argument("--json", action="store_true", help="Emit only the JSON trace.")
+    parser.add_argument(
+        "--model",
+        help="LiteLLM model id, e.g. openrouter/google/gemma-4-31b-it:free. "
+        "Overrides LLM_MODEL from the environment/.env.",
+    )
     args = parser.parse_args()
 
     load_env_files()
 
-    key = require_credentials()
-    if key is None:
+    model = resolve_model(args.model)
+    if require_credentials(model) is None:
         return 0
 
     try:
@@ -358,10 +393,6 @@ def main() -> int:
         # Retries belong to our adapter with an explicit policy, never to the SDK's
         # defaults: an auth or billing error must fail in seconds, not in minutes.
         litellm.num_retries = 0
-
-        # LiteLLM reads GEMINI_API_KEY itself; pass it explicitly so the script
-        # works no matter which of the two accepted names was set.
-        os.environ.setdefault("GEMINI_API_KEY", key)
     except ImportError:
         print(
             "ERROR: litellm is not installed. Run: uv sync --extra llm",
@@ -380,10 +411,10 @@ def main() -> int:
     else:
         selected = CASES
 
-    results = [run_case(completion, case) for case in selected]
+    results = [run_case(completion, case, model) for case in selected]
 
     if not args.json:
-        print(f"\nmodel: {MODEL}")
+        print(f"\nmodel: {model}")
         print(f"cases: {len(results)}\n")
         for item in results:
             mark = "PASS" if item.passed else ("SKIP" if item.expected_tool is None else "FAIL")

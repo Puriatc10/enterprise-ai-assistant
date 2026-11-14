@@ -63,7 +63,8 @@ microservices.
 ## Technology stack
 
 React · TypeScript · Vite — FastAPI · Pydantic · Uvicorn · HTTPX — LiteLLM SDK in-process
-with Google Gemini as the initial provider — Supabase (PostgreSQL + Auth) — Docker /
+with OpenRouter's free tool-capable models (Gemini kept as a later, blocked alternative)
+— Supabase (PostgreSQL + Auth) — Docker /
 Compose — Render for first hosting.
 
 Rationale, alternatives, and limitations for each choice: [`docs/architecture/TECH_STACK.md`](docs/architecture/TECH_STACK.md).
@@ -208,7 +209,7 @@ the application database is logically separate from connector data sources.
 | Frontend typecheck | `cd apps/web && npm run typecheck` |
 | Frontend build | `cd apps/web && npm run build` |
 | Whole stack | `docker compose up --build` |
-| Tool-calling spike (needs a Gemini key) | `cd apps/api && uv sync --extra llm && uv run --extra llm python scripts/phase1_spike.py` |
+| Tool-calling spike (needs `OPENROUTER_API_KEY`) | `cd apps/api && uv sync --extra llm && uv run --extra llm python scripts/phase1_spike.py` |
 
 ### Continuous integration
 
@@ -234,6 +235,7 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phases 0–6 plus future knowledge retrieval |
 | [`docs/decisions/ADR-0001-initial-architecture.md`](docs/decisions/ADR-0001-initial-architecture.md) | what was decided, and what is still provisional |
 | [`docs/decisions/ADR-0002-didar24-access-path.md`](docs/decisions/ADR-0002-didar24-access-path.md) | why the mock connector is the primary data path |
+| [`docs/decisions/ADR-0003-provider-selection.md`](docs/decisions/ADR-0003-provider-selection.md) | why the MVP runs on OpenRouter rather than Gemini |
 | [`docs/analysis/PHASE1-DIDAR24.md`](docs/analysis/PHASE1-DIDAR24.md) | Phase 1 evidence: what Didar24 exposes, and what it does not |
 | [`docs/analysis/PHASE1-LLM.md`](docs/analysis/PHASE1-LLM.md) | Phase 1 evidence: measured tool-calling results, and the adapter rules they imply |
 | [`docs/development/DEVELOPMENT.md`](docs/development/DEVELOPMENT.md) | environment details, ports, troubleshooting |

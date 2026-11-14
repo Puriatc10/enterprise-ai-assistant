@@ -43,9 +43,16 @@ class Settings(BaseSettings):
 
     # -- LLM provider abstraction -----------------------------------------
     # A LiteLLM model identifier: provider prefix + model name.
-    llm_provider: str = "gemini"
-    llm_model: str = "gemini/gemini-3.5-flash-lite"
-    llm_timeout_seconds: float = 30.0
+    # Chosen and verified in Phase 1 (2026-11-14): free, tool-calling, 1M context,
+    # 1.1–7.7 s observed latency. Evidence: docs/analysis/PHASE1-LLM.md.
+    # Fallbacks if the shared free pool saturates: OpenRouter `inclusionai/
+    # ling-3.2-flash:free`, `dots-studio/dots-3-note-preview:free`.
+    llm_provider: str = "openrouter"
+    llm_model: str = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    # Free gateway routes are slower than paid endpoints; measure, don't assume.
+    llm_timeout_seconds: float = 45.0
+    openrouter_api_key: SecretStr | None = None
+    # Kept as an alternative provider: the project may later be entitled to it.
     gemini_api_key: SecretStr | None = None
     # Hard ceiling on tool-execution rounds per user turn.
     agent_max_tool_rounds: int = 3
@@ -96,17 +103,18 @@ class Settings(BaseSettings):
 
     @property
     def llm_configured(self) -> bool:
-        """Whether the configured provider has what it needs to be called.
+        """Whether the configured provider has a credential to be called with.
 
-        A readiness hint for the health endpoint, not a guarantee: it checks
-        that a credential exists, not that the provider accepts it.
+        A readiness hint for the health endpoint, not a guarantee: it checks that a
+        credential exists, not that the provider will accept it. Mapping provider →
+        credential here keeps the "is it usable?" question in one place instead of
+        leaking provider names into handlers.
         """
-        if self.llm_provider == "gemini":
-            return self.gemini_api_key is not None and bool(
-                self.gemini_api_key.get_secret_value().strip()
-            )
-        # Unknown/other providers: Phase 2 adds their credential checks.
-        return False
+        credential = {
+            "openrouter": self.openrouter_api_key,
+            "gemini": self.gemini_api_key,
+        }.get(self.llm_provider)
+        return credential is not None and bool(credential.get_secret_value().strip())
 
 
 @lru_cache

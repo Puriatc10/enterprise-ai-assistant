@@ -122,9 +122,38 @@ Verification date for model/provider facts: **2026-11-14**. Provider-facing numb
 
 ## LLM integration
 
-### Google Gemini (initial provider)
+### OpenRouter + Nemotron 3 Ultra (current provider)
 
-- **Responsibility**: language understanding, tool-call proposal, answer generation.
+- **Responsibility**: the provider the MVP actually calls; one key in front of ~470 models.
+- **Why**: it was the only route both reachable **and** entitled without billing for this
+  project (Gemini's free tier is not available — see below). One credential, any model id,
+  so a provider change stays configuration. Free tier suffices for synthetic-data work.
+- **Verified 2026-11-14** (`docs/analysis/PHASE1-LLM.md`, two independent runs):
+  - Model: `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` — **$0**, 1M context,
+    `tools` in `supported_parameters`, reasoning model.
+  - Tool calling: 4/4 cases (direct count, informal count, id extraction from Persian
+    prose, and a no-tool control) with the tool result composed into the answer.
+  - Latency: **1.1–7.7 s** typical per turn, **28 s** observed once under pool contention
+    (the reason the configured timeout is 45 s); tokens: 2 156 in / 268 out for the four
+    cases.
+  - Free-model inventory at verification: 15 of 471 models were both free and
+    tool-capable.
+- **Alternatives**: Gemini (blocked, below) · Groq (fast free tier, different model
+  family) · local Ollama (no key at all, best privacy, weaker Persian signal) ·
+  ChatGPT-compatible paid APIs.
+- **Limitations**: the free pool is **shared** — `429 upstream_provider_shared_pool` was
+  observed seconds after a successful probe, so a fallback id is mandatory
+  (`openrouter/inclusionai/ling-3.2-flash:free`,
+  `openrouter/dots-studio/dots-3-note-preview:free`); free-model traffic may be logged or
+  used for training by the upstream provider, so **synthetic data only**; output quality
+  follows whichever model the gateway routes to (one observed Persian/Russian
+  code-switch); a gateway is one more hop that can fail.
+- **Status**: MVP-required (current default). Docs: <https://openrouter.ai/docs> ·
+  models <https://openrouter.ai/models>
+
+### Google Gemini (alternative — currently blocked)
+
+- **Responsibility**: former default provider; kept as the paid-path candidate.
 - **Why**: usable free tier for an educational MVP, strong multilingual/Persian
   performance, function calling, long context.
 - **Alternatives**: OpenAI (best tooling, no meaningful free tier), Groq (fast, limited
@@ -154,7 +183,9 @@ Verification date for model/provider facts: **2026-11-14**. Provider-facing numb
   Also: **Gemini 3.x rejects `temperature`** (`UnsupportedParamsError` before the HTTP
   call), so an adapter must treat sampling parameters as optional. Details and the
   resulting rules: `docs/analysis/PHASE1-LLM.md`.
-- **Status**: MVP-required. Docs: <https://ai.google.dev/gemini-api/docs> ·
+- **Status**: MVP-alternative, **not used** — no free tier is available for this project
+  (`403 PERMISSION_DENIED` without billing), and the MVP runs on OpenRouter. Revisit only
+  with a paid tier or Vertex. Docs: <https://ai.google.dev/gemini-api/docs> ·
   pricing <https://ai.google.dev/gemini-api/docs/pricing> ·
   rate limits <https://ai.google.dev/gemini-api/docs/rate-limits>
 

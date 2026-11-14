@@ -28,7 +28,7 @@ def bare_settings() -> Settings:
 @pytest.fixture
 def configured_settings() -> Settings:
     """Settings with a placeholder credential, to exercise readiness reporting."""
-    return Settings(_env_file=None, gemini_api_key=FAKE_API_KEY)
+    return Settings(_env_file=None, openrouter_api_key=FAKE_API_KEY)
 
 
 @pytest.fixture

@@ -108,11 +108,11 @@ Rules:
 
 ## 6. LLM data privacy
 
-- **Free-tier constraint**: Gemini's free tier may use submitted content to improve
-  Google's products. Therefore, until a paid/data-processing configuration is approved,
-  only **synthetic, non-sensitive** data may be sent: fabricated policies, fabricated
-  names, no real PII, no real insurance records, no private documents, no confidential
-  company information.
+- **Free-tier constraint**: free-tier routes (Gemini's free tier, OpenRouter's `:free`
+  models) may log, review, or use submitted content to improve their products.
+  Therefore, until a paid or self-hosted configuration is approved, only **synthetic,
+  non-sensitive** data may be sent: fabricated policies, fabricated names, no real PII,
+  no real insurance records, no private documents, no confidential company information.
 - **Prompt minimization**: send only what the answer needs. Tool results are projected to
   the fields the answer requires; identifiers are opaque; no whole-record dumps.
 - The LLM never receives credentials, connection strings, tokens, internal hostnames, or
@@ -188,7 +188,7 @@ considered complete:
 ## 11. Open security questions (to resolve before public demonstration)
 
 1. Does any Didar24 integration path exist that is authorized and read-only? (Phase 1)
-2. Paid Gemini tier or self-hosted model for anything beyond synthetic data?
+2. A paid provider tier, or a self-hosted model, for anything beyond synthetic data?
 3. Token storage strategy in the browser (memory + refresh vs httpOnly cookie) and the
    CORS/CSRF implications of each. (Phase 5)
 4. Data retention window for conversations and tool audit records.

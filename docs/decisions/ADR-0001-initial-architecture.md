@@ -84,6 +84,11 @@ becomes justified and the port makes that swap local.
 
 ## Decision 5 — Gemini as the initial candidate provider
 
+> **Superseded by `ADR-0003` (2026-11-14).** Gemini is no longer the MVP provider: this
+> project has no free tier (`403 PERMISSION_DENIED` without billing), so the MVP runs on
+> OpenRouter's free tool-capable models. The decision below is kept as the record of what
+> was chosen at bootstrap and why, and of the verification that still holds.
+
 **Chosen**: `gemini/gemini-3.5-flash-lite` via LiteLLM, env-configurable.
 
 **Verified at decision time (2026-11-14)**: the model id exists and is offered; LiteLLM

@@ -38,10 +38,10 @@ jobs:
       - name: Check for the API key
         id: key
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
-          if [ -z "${GEMINI_API_KEY}" ]; then
-            echo "::notice title=No API key::Repository secret GEMINI_API_KEY is not set; skipping the live call."
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            echo "::notice title=No API key::Repository secret OPENROUTER_API_KEY is not set; skipping the live call."
             echo "have_key=false" >> "$GITHUB_OUTPUT"
           else
             echo "have_key=true" >> "$GITHUB_OUTPUT"
@@ -54,7 +54,7 @@ jobs:
       - name: Run the spike
         if: steps.key.outputs.have_key == 'true'
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           if [ -n "${{ inputs.question }}" ]; then
             uv run --extra llm python scripts/phase1_spike.py --question "${{ inputs.question }}"

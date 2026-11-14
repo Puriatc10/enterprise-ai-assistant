@@ -53,14 +53,15 @@ uv run --extra llm python scripts/phase1_spike.py --case 1    # one case
 ```
 
 It sends four synthetic-data questions to `LLM_MODEL` (default
-`gemini/gemini-3.5-flash-lite`) and reports, per case: the tool the model asked for,
-the arguments it extracted, whether the tool round-trip completed, latency, and token
-usage. Exit code is `2` if a tool expectation fails.
+`openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`) and reports, per case: the tool the
+model asked for, the arguments it extracted, whether the tool round-trip completed,
+latency, and token usage. Exit code is `2` if a tool expectation fails. `--model` switches
+provider without editing code.
 
-Without `GEMINI_API_KEY` it prints a skip and exits `0` — the spike is safe to run
-anywhere and is never part of CI. The live run happens through the manual
-`llm-spike` workflow, which reads the `GEMINI_API_KEY` repository secret and does
-nothing when it is absent.
+Without a credential for the configured provider (`OPENROUTER_API_KEY` for the default
+model) it prints a skip and exits `0` — the spike is safe to run anywhere and is never part
+of CI. The live run happens through the manual `llm-spike` workflow, which reads the
+`GEMINI_API_KEY` repository secret and does nothing when it is absent.
 
 ## Frontend
 

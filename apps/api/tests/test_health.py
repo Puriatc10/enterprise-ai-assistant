@@ -25,8 +25,8 @@ def test_health_returns_ok_without_any_credentials(client: TestClient) -> None:
 def test_health_reports_llm_as_unconfigured_without_a_key(client: TestClient) -> None:
     llm = client.get("/health").json()["llm"]
 
-    assert llm["provider"] == "gemini"
-    assert llm["model"].startswith("gemini/")
+    assert llm["provider"] == "openrouter"
+    assert llm["model"].startswith("openrouter/")
     assert llm["configured"] is False
 
 

@@ -60,8 +60,9 @@ them. This phase produces findings, not features.
   not IP), Gemini 3.x rejecting `temperature`, SDK retries masking errors, and OpenRouter
   free-pool `429`s. All in `docs/analysis/PHASE1-LLM.md` §4.
 
-Carry-over into Phase 2: re-run the same case set against real Gemini once billing exists,
-and test multi-turn context (the spike is single-turn).
+Carry-over into Phase 2: multi-turn context (the spike is single-turn), and a paid-tier
+re-run against Gemini only if billing ever appears — the MVP default is now OpenRouter
+(`ADR-0003`).
 
 Exit criteria: a short findings document with measurements, a working prototype script,
 and a yes/no answer on Didar24. Any architecture change this forces goes through an ADR.

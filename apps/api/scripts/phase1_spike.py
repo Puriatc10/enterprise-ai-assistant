@@ -44,7 +44,8 @@ MAX_TOOL_ROUNDS = 3
 TIMEOUT_SECONDS = 45.0
 
 #: Built-in default when neither `--model` nor `LLM_MODEL` is set.
-BUILTIN_DEFAULT_MODEL = "gemini/gemini-3.5-flash-lite"
+#: Matches Settings.llm_model: free, tool-capable, verified in Phase 1.
+BUILTIN_DEFAULT_MODEL = "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
 
 #: Which environment variable carries the credential for each LiteLLM prefix.
 #: Keeping this table here is the spike-sized version of the adapter's mapping.

@@ -66,8 +66,9 @@ silently diverging.
 7. **Tool execution is bounded.** Registry-only names, schema-validated arguments,
    per-call timeout, max rounds per turn, and errors returned as structured facts —
    never as stack traces.
-8. **Data privacy.** Free-tier Gemini may use submitted content. Only synthetic or
-   non-sensitive data may be sent without an approved paid configuration.
+8. **Data privacy.** Free-tier routes (Gemini free tier, OpenRouter `:free` models) may
+   use submitted content. Only synthetic or non-sensitive data may be sent without an
+   approved paid configuration.
 
 Details and rationale: `docs/architecture/SECURITY.md`.
 

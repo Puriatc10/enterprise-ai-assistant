@@ -47,7 +47,14 @@ Run of 2026-11-14, second (repeat) run, with `litellm.num_retries = 0`:
 | **total** | 3/3 expectations, 1/1 control | | | **2 156** | **268** | ✅ |
 
 First run (independent, same configuration): 4 381 / 5 185 / 1 124 / 4 728 ms — also 4/4.
-Two clean runs, no flakes between them.
+A third run, after the provider became the configured default (no `--model` flag):
+4/4 again, with 1.6–28.1 s — the 28 s outlier was free-pool contention on one call, and it
+is the reason the timeout default is 45 s rather than 30 s (at 30 s that call would have
+been cut off). Three runs, no flakes.
+
+Note on the artefact in §3: the Russian connective «которых» appeared again in the third
+run, so it is **systematic for this model**, not a one-off glitch. It must be fixed by
+prompting or a stronger model before the demo — see §7.
 
 **Answers produced, verbatim:**
 

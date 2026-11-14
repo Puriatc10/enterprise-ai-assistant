@@ -35,10 +35,28 @@ def test_values_are_normalized() -> None:
 
 
 def test_secrets_are_not_printable() -> None:
-    settings = Settings(_env_file=None, gemini_api_key="super-secret-value")
+    settings = Settings(_env_file=None, openrouter_api_key="super-secret-value")
 
     assert "super-secret-value" not in repr(settings)
     assert settings.llm_configured is True
+
+
+def test_readiness_checks_the_credential_of_the_configured_provider() -> None:
+    """A key for a *different* provider must not report the active one as ready."""
+    settings = Settings(_env_file=None, gemini_api_key="some-gemini-key", llm_provider="openrouter")
+
+    assert settings.llm_configured is False
+
+
+def test_readiness_is_false_for_an_unknown_provider() -> None:
+    settings = Settings(
+        _env_file=None,
+        llm_provider="some-future-provider",
+        openrouter_api_key="a-key",
+        gemini_api_key="another-key",
+    )
+
+    assert settings.llm_configured is False
 
 
 @pytest.mark.parametrize("rounds", [0, -1, 11])

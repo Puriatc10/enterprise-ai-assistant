@@ -67,7 +67,7 @@ export function App() {
           <div>
             <h3>Next phases</h3>
             <ul>
-              <li>Phase 1 — technical validation (Didar24 access, Gemini tool calling)</li>
+              <li>Phase 1 — technical validation (Didar24 access, tool calling)</li>
               <li>Phase 2 — auth, persistence, LLM port</li>
               <li>Phase 3 — tool registry and guarded execution</li>
               <li>Phase 4 — read-only data connectors</li>

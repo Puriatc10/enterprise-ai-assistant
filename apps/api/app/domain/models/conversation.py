@@ -52,5 +52,8 @@ class LLMRequest(BaseModel):
 
     messages: tuple[ChatMessage, ...]
     tools: tuple[ToolSpec, ...] = ()
-    temperature: float = 0.0
+    #: ``None`` means "do not send it". Phase 1 found that Gemini 3.x rejects
+    #: ``temperature`` outright, so the port cannot promise it is supported; the
+    #: adapter maps or drops it per provider.
+    temperature: float | None = None
     max_tokens: int | None = None

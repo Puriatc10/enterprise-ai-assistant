@@ -56,6 +56,13 @@ Note on the artefact in §3: the Russian connective «которых» appeared 
 run, so it is **systematic for this model**, not a one-off glitch. It must be fixed by
 prompting or a stronger model before the demo — see §7.
 
+A fourth run on the GitHub runner (`llm-spike` workflow, repository secret) passed 3/3
+again at 3.3–17.9 s, and reproduced the same defect in a **different** language: one
+answer contained `פוליס` (Hebrew for "policy") instead of `بیمه‌نامه`. So the code-switch
+is systematic but non-deterministic in *which* foreign script leaks — which rules out
+"one bad word to blacklist" and points at prompt-level language pinning plus a stronger
+model. Two of that run's answers were otherwise clean Persian.
+
 **Answers produced, verbatim:**
 
 - «شما **۳** بیمه‌نامه دارید، از которых **۲** مورد **فعال** است.» — correct count (3 total,

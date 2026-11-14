@@ -102,6 +102,21 @@ class Settings(BaseSettings):
         return self.app_env == "production"
 
     @property
+    def llm_api_key(self) -> str | None:
+        """The credential string for the configured provider, if any.
+
+        Adapters receive this explicitly rather than relying on the SDK finding it
+        in ``os.environ``: settings are read from ``.env`` by Pydantic and never
+        injected into the process environment, so an SDK that only looks at
+        environment variables would silently see no key.
+        """
+        credential = {
+            "openrouter": self.openrouter_api_key,
+            "gemini": self.gemini_api_key,
+        }.get(self.llm_provider)
+        return credential.get_secret_value() if credential is not None else None
+
+    @property
     def llm_configured(self) -> bool:
         """Whether the configured provider has a credential to be called with.
 
@@ -110,11 +125,8 @@ class Settings(BaseSettings):
         credential here keeps the "is it usable?" question in one place instead of
         leaking provider names into handlers.
         """
-        credential = {
-            "openrouter": self.openrouter_api_key,
-            "gemini": self.gemini_api_key,
-        }.get(self.llm_provider)
-        return credential is not None and bool(credential.get_secret_value().strip())
+        key = self.llm_api_key
+        return key is not None and bool(key.strip())
 
 
 @lru_cache

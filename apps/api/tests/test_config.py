@@ -13,7 +13,8 @@ def test_defaults_are_safe_and_credential_free() -> None:
 
     assert settings.app_env == "development"
     assert settings.gemini_api_key is None
-    assert settings.supabase_service_role_key is None
+    assert settings.supabase_url is None
+    assert settings.supabase_configured is False
     assert settings.llm_configured is False
 
 

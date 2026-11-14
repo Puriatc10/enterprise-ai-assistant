@@ -21,6 +21,7 @@ from app import __version__
 from app.api.router import api_router
 from app.api.routes.health import SERVICE_NAME
 from app.core.config import Settings, get_settings
+from app.core.dependencies import build_token_verifier
 from app.core.logging import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -34,14 +35,20 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     and attaches them to ``app.state`` so nothing is constructed per request.
     """
     settings: Settings = application.state.settings
+    # Composition happens at startup, once: the verifier owns a key cache, and the
+    # LLM adapter is built lazily on first use (it needs the provider SDK).
+    application.state.token_verifier = build_token_verifier(settings)
     logger.info(
-        "startup service=%s env=%s version=%s llm_provider=%s llm_model=%s llm_configured=%s",
+        "startup service=%s env=%s version=%s llm_provider=%s llm_model=%s "
+        "llm_configured=%s supabase_configured=%s auth_enabled=%s",
         SERVICE_NAME,
         settings.app_env,
         settings.app_version,
         settings.llm_provider,
         settings.llm_model,
         settings.llm_configured,
+        settings.supabase_configured,
+        application.state.token_verifier is not None,
     )
     yield
     logger.info("shutdown service=%s", SERVICE_NAME)

@@ -1,15 +1,13 @@
-"""Authentication enforcement point.
+"""Real authentication: bearer token → verified ``AuthContext``.
 
-Phase 0 deliberately contains **no** token verifier. Rather than shipping a
-placeholder that lets requests through, the dependency fails closed: any route
-that depends on it returns ``501`` until Phase 2 wires real Supabase JWT
-verification (signature against JWKS, ``iss``/``aud``, ``exp``/``nbf``, then
-``AuthContext`` derived from the claims).
+Phase 0 shipped a dependency that failed closed with `501`. That is replaced here,
+but the fail-closed behaviour is preserved for the case that still matters: a
+deployment with no Supabase configuration must refuse protected routes rather than
+invent an identity.
 
-Why this file exists before the implementation: authorization must not be
-something a later feature adds. Every future route is written against
-``require_auth_context``; the contract is "you get a verified identity or the
-request stops here".
+The rule this file enforces (docs/architecture/SECURITY.md §1): identity comes from
+a verified token and from nowhere else. No handler, service, tool or connector may
+fall back to a client-supplied user or tenant id.
 """
 
 from __future__ import annotations
@@ -17,31 +15,50 @@ from __future__ import annotations
 from fastapi import HTTPException, Request, status
 
 from app.domain.models.auth import AuthContext
+from app.security.tokens import AuthError, SupabaseTokenVerifier
 
 #: Header carrying the Supabase access token.
 AUTHORIZATION_HEADER = "Authorization"
 
+_BEARER = "bearer"
 
-async def require_auth_context(request: Request | None = None) -> AuthContext:
+
+def _unauthorized(reason: str, detail: str) -> HTTPException:
+    # `WWW-Authenticate` is required by RFC 6750 for a 401, and the reason code is
+    # safe to expose: it names a category, never a token or a claim value.
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=f"Authentication failed: {detail}",
+        headers={"WWW-Authenticate": f'Bearer error="invalid_token", error_description="{reason}"'},
+    )
+
+
+async def require_auth_context(request: Request) -> AuthContext:
     """FastAPI dependency: return the verified identity for this request.
 
-    Phase 0 behaviour: always raises ``501 Not Implemented``.
-
-    Phase 2 behaviour: reads the bearer token, verifies it against Supabase's
-    JWKS, and returns ``AuthContext`` built only from verified claims. A model,
-    request body, or header other than the bearer token may never supply
-    ``subject`` or ``tenant_id``.
-
     Raises:
-        HTTPException: 401 when no usable credential is presented, 403 when the
-            token is valid but lacks the required scope, 501 until implemented.
+        HTTPException: 501 when authentication is not configured (fail closed),
+            401 when the credential is missing or untrustworthy.
     """
-    # The request is accepted now so the signature stays stable in Phase 2.
-    del request
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=(
-            "Authentication is not implemented yet (Phase 2). This endpoint fails closed "
-            "rather than serving unauthenticated requests."
-        ),
-    )
+    verifier: SupabaseTokenVerifier | None = getattr(request.app.state, "token_verifier", None)
+    if verifier is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "Authentication is not configured (SUPABASE_URL/SUPABASE_ANON_KEY missing). "
+                "Protected routes fail closed rather than serving anonymous requests."
+            ),
+        )
+
+    scheme, _, token = (request.headers.get(AUTHORIZATION_HEADER) or "").partition(" ")
+    if scheme.lower() != _BEARER or not token.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed: missing bearer token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        return await verifier.verify(token.strip())
+    except AuthError as exc:
+        raise _unauthorized(exc.reason, str(exc)) from exc

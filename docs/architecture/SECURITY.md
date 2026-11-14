@@ -90,11 +90,14 @@ a workaround.
 
 | Secret | Where it lives | Never |
 |---|---|---|
-| `GEMINI_API_KEY` | backend env / host secret store | frontend bundle, logs, prompt, tool result |
-| `SUPABASE_SERVICE_ROLE_KEY` | backend env only | any browser or LLM context |
-| `SUPABASE_ANON_KEY` | can be public (by design) | — do not confuse it with the service key |
+| `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | backend env / host secret store | frontend bundle, logs, prompt, tool result |
+| `SUPABASE_ANON_KEY` | can be public (by design) | — do not confuse it with a privileged key |
+| Supabase **service_role** key | **not held by this project** — the backend forwards the caller's own JWT to PostgREST so RLS enforces scope; a bypass key would disable the backstop | anywhere |
 | connector credentials | backend env, read-only roles | app database, git, client code |
 | user tokens | client memory / secure cookie | URLs, logs, error messages |
+
+Access tokens are verified against the project's JWKS (asymmetric ES256/RS256), so no
+shared JWT signing secret is stored anywhere either.
 
 Rules:
 

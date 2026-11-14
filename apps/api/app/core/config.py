@@ -60,8 +60,12 @@ class Settings(BaseSettings):
     # -- application storage / auth (Supabase) ----------------------------
     supabase_url: str | None = None
     supabase_anon_key: SecretStr | None = None
-    # Bypasses row-level security: backend only, never to browser or model.
-    supabase_service_role_key: SecretStr | None = None
+    # Audience Supabase puts in access tokens; "authenticated" is its default.
+    supabase_jwt_audience: str = "authenticated"
+    # Deliberately absent: supabase_service_role_key. The backend queries PostgREST
+    # with the *caller's* token so row-level security enforces scope. Holding a
+    # key that bypasses RLS would disable the backstop this design advertises
+    # (docs/architecture/SECURITY.md §2).
 
     # -- external connectors (read-only) ----------------------------------
     didar_api_base_url: str | None = None
@@ -90,6 +94,12 @@ class Settings(BaseSettings):
             msg = "timeouts must be positive"
             raise ValueError(msg)
         return value
+
+    @field_validator("supabase_url", "didar_api_base_url")
+    @classmethod
+    def _strip_trailing_slash(cls, value: str | None) -> str | None:
+        """Normalize base URLs: a trailing slash produces `//auth/v1/...`."""
+        return value.rstrip("/") if isinstance(value, str) else value
 
     # -- derived values ---------------------------------------------------
     @property
@@ -127,6 +137,30 @@ class Settings(BaseSettings):
         """
         key = self.llm_api_key
         return key is not None and bool(key.strip())
+
+    # -- Supabase derived endpoints ---------------------------------------
+    @property
+    def supabase_configured(self) -> bool:
+        """Whether storage/auth can be reached at all (URL + public key present)."""
+        return bool(self.supabase_url) and self.supabase_anon_key is not None
+
+    @property
+    def supabase_jwks_url(self) -> str | None:
+        """Public keys for verifying access tokens.
+
+        Asymmetric signing (ES256/RS256) is the current Supabase default, which is
+        why no shared JWT secret is stored anywhere in this project.
+        """
+        if not self.supabase_url:
+            return None
+        return f"{self.supabase_url}/auth/v1/.well-known/jwks.json"
+
+    @property
+    def supabase_issuer(self) -> str | None:
+        """Expected `iss` claim for this project's tokens."""
+        if not self.supabase_url:
+            return None
+        return f"{self.supabase_url}/auth/v1"
 
 
 @lru_cache

@@ -9,13 +9,16 @@ implementations.
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from collections.abc import Awaitable, Callable
+from typing import Annotated, Any
 
+import httpx
 from fastapi import Depends, Request
 
 from app.core.config import Settings, get_settings
 from app.domain.interfaces.llm import LLMPort
 from app.infrastructure.llm.litellm_adapter import LiteLLMAdapter
+from app.security.tokens import JwksCache, SupabaseTokenVerifier, TokenVerifierConfig
 
 logger = logging.getLogger(__name__)
 
@@ -76,3 +79,45 @@ def get_llm_adapter(request: Request) -> LLMPort:
 
 #: Annotated dependency type for handlers: ``llm: LLMPortDep``.
 LLMPortDep = Annotated[LLMPort, Depends(get_llm_adapter)]
+
+
+def _jwks_fetcher(url: str) -> Callable[[], Awaitable[dict[str, Any]]]:
+    """Build a fetcher for the project's JWKS document.
+
+    A short-lived client per refresh is deliberate: refreshes are rare (cached for
+    five minutes and only on rotation), and this avoids holding a connection pool
+    open for a call that may never happen.
+    """
+
+    async def fetch() -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            payload = response.json()
+        if not isinstance(payload, dict):
+            raise RuntimeError("JWKS endpoint did not return a JSON object.")
+        return payload
+
+    return fetch
+
+
+def build_token_verifier(settings: Settings) -> SupabaseTokenVerifier | None:
+    """Compose the token verifier, or ``None`` when Supabase is not configured.
+
+    Returning ``None`` (rather than a permissive stub) is what preserves
+    fail-closed behaviour: protected routes answer `501` instead of guessing an
+    identity.
+    """
+    jwks_url = settings.supabase_jwks_url
+    issuer = settings.supabase_issuer
+    if not jwks_url or not issuer or not settings.supabase_configured:
+        logger.info("supabase auth not configured; protected routes will fail closed")
+        return None
+
+    return SupabaseTokenVerifier(
+        jwks=JwksCache(_jwks_fetcher(jwks_url)),
+        config=TokenVerifierConfig(
+            issuer=issuer,
+            audience=settings.supabase_jwt_audience,
+        ),
+    )

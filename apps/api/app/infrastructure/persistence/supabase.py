@@ -207,3 +207,31 @@ class SupabaseConversationRepository:
                 self._url("messages"), params=params, headers=self._headers()
             )
         return [_to_message(row) for row in self._rows(response)]
+
+    async def record_tool_invocation(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        tool_name: str,
+        arguments_hash: str,
+        status: str,
+        latency_ms: int,
+    ) -> None:
+        payload = {
+            "conversation_id": conversation_id,
+            "user_id": context.subject,
+            "tenant_id": context.tenant_id,
+            "tool_name": tool_name,
+            "arguments_hash": arguments_hash,
+            "status": status,
+            "latency_ms": latency_ms,
+        }
+        async with self._session() as client:
+            response = await client.post(
+                self._url("tool_invocations"),
+                json=payload,
+                headers=self._headers(prefer="return=minimal"),
+            )
+        # No body is returned; only the status matters here.
+        self._raise_for_status(response)

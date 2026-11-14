@@ -15,10 +15,14 @@ from typing import Annotated, Any
 import httpx
 from fastapi import Depends, HTTPException, Request, status
 
+from app.application.tools.executor import ToolExecutor
+from app.application.tools.policies import build_policy_registry
+from app.application.tools.registry import ToolRegistry
 from app.core.config import Settings, get_settings
 from app.domain.interfaces.llm import LLMPort
 from app.domain.interfaces.repository import ConversationRepository
 from app.domain.models.auth import AuthContext
+from app.infrastructure.connectors.mock.policies import MockPolicyConnector
 from app.infrastructure.llm.litellm_adapter import LiteLLMAdapter
 from app.infrastructure.persistence.supabase import SupabaseConversationRepository
 from app.security.auth import require_auth_context
@@ -163,3 +167,30 @@ ConversationRepositoryDep = Annotated[ConversationRepository, Depends(get_conver
 
 #: Annotated dependency type for handlers: ``context: AuthContextDep``.
 AuthContextDep = Annotated[AuthContext, Depends(require_auth_context)]
+
+
+def get_tool_registry(request: Request) -> ToolRegistry:
+    """The registered tools.
+
+    Built once per process (startup sets it on ``app.state``); the fallback keeps
+    scripts and tests working when they construct an app without the lifespan.
+    """
+    registry = getattr(request.app.state, "tool_registry", None)
+    if registry is None:
+        registry = build_policy_registry(MockPolicyConnector())
+        request.app.state.tool_registry = registry
+    return registry
+
+
+def get_tool_executor(request: Request) -> ToolExecutor:
+    """The executor, bound to whichever registry is live."""
+    executor = getattr(request.app.state, "tool_executor", None)
+    if executor is None:
+        executor = ToolExecutor(registry=get_tool_registry(request))
+        request.app.state.tool_executor = executor
+    return executor
+
+
+#: Annotated dependency types for handlers.
+ToolRegistryDep = Annotated[ToolRegistry, Depends(get_tool_registry)]
+ToolExecutorDep = Annotated[ToolExecutor, Depends(get_tool_executor)]

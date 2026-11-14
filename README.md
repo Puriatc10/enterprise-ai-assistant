@@ -6,10 +6,11 @@ A web-based enterprise assistant that answers natural-language questions about d
 spread across multiple organizational systems — by calling narrowly scoped, read-only
 tools and composing the answer from what those tools actually returned.
 
-> **Status: Phase 0 — project bootstrap.** This repository is an architectural
-> foundation, not a working chatbot. It contains a runnable API skeleton, a frontend
-> skeleton, and the documentation that later phases are built against. It is **not**
-> production-ready.
+> **Status: Phase 3 — tool execution.** The backend now runs the full loop: authenticated
+> request → LLM proposes a tool → the backend validates, authorizes and executes it →
+> the answer is composed from what the tool returned. Authentication and conversation
+> persistence are wired to Supabase; the data behind the tools is synthetic (ADR-0002).
+> The frontend is still a skeleton, and this is **not** production-ready.
 
 ---
 
@@ -44,14 +45,14 @@ authorized server-side before any connector runs.
 
 ## Main capabilities
 
-| Capability | Phase 0 state |
+| Capability | State |
 |---|---|
-| Web chat interface (React + TypeScript) | skeleton, no chat |
-| Backend API (FastAPI) | health endpoint only |
-| Provider-independent LLM abstraction | ports defined, adapter in Phase 2 |
-| Function / tool calling with validation | designed, not implemented |
-| Multiple read-only data connectors | designed, not implemented |
-| Supabase auth + persistence | configured, not wired |
+| Web chat interface (React + TypeScript) | skeleton, no chat (Phase 5) |
+| Backend API (FastAPI) | health + conversations + send turn |
+| Provider-independent LLM abstraction | port + LiteLLM adapter, OpenRouter verified |
+| Function / tool calling with validation | **implemented** — registry + guarded executor |
+| Multiple read-only data connectors | mock connector live; Postgres/REST in Phase 4 |
+| Supabase auth + persistence | JWT verification + RLS-scoped repository |
 | Docker-based dev environment | working |
 | Python packaging & tests | working (1 health test) |
 
@@ -236,6 +237,7 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/decisions/ADR-0001-initial-architecture.md`](docs/decisions/ADR-0001-initial-architecture.md) | what was decided, and what is still provisional |
 | [`docs/decisions/ADR-0002-didar24-access-path.md`](docs/decisions/ADR-0002-didar24-access-path.md) | why the mock connector is the primary data path |
 | [`docs/decisions/ADR-0003-provider-selection.md`](docs/decisions/ADR-0003-provider-selection.md) | why the MVP runs on OpenRouter rather than Gemini |
+| [`docs/decisions/ADR-0004-tool-execution.md`](docs/decisions/ADR-0004-tool-execution.md) | the tool execution model: allowlist, refusals as data, identity from context |
 | [`docs/analysis/PHASE1-DIDAR24.md`](docs/analysis/PHASE1-DIDAR24.md) | Phase 1 evidence: what Didar24 exposes, and what it does not |
 | [`docs/analysis/PHASE1-LLM.md`](docs/analysis/PHASE1-LLM.md) | Phase 1 evidence: measured tool-calling results, and the adapter rules they imply |
 | [`docs/development/DEVELOPMENT.md`](docs/development/DEVELOPMENT.md) | environment details, ports, troubleshooting |

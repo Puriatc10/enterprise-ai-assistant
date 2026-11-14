@@ -20,6 +20,8 @@ from app.core.dependencies import (
     AuthContextDep,
     ConversationRepositoryDep,
     LLMPortDep,
+    ToolExecutorDep,
+    ToolRegistryDep,
 )
 from app.domain.models.conversation import Usage
 
@@ -133,8 +135,10 @@ async def send_message(
     context: AuthContextDep,
     repository: ConversationRepositoryDep,
     llm: LLMPortDep,
+    tools: ToolRegistryDep,
+    executor: ToolExecutorDep,
 ) -> SendMessageResponse:
-    service = ChatService(repository=repository, llm=llm)
+    service = ChatService(repository=repository, llm=llm, tools=tools, executor=executor)
     result = await service.send_message(
         context=context,
         message=payload.content,

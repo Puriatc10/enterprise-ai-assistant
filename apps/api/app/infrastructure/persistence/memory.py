@@ -52,6 +52,7 @@ class InMemoryConversationRepository:
         self._clock = clock
         self._conversations: dict[str, _ConversationRow] = {}
         self._messages: list[_MessageRow] = []
+        self._audit: list[dict[str, object]] = []
 
     # -- internals --------------------------------------------------------
     @staticmethod
@@ -150,3 +151,32 @@ class InMemoryConversationRepository:
             )
             for row in rows[:limit]
         ]
+
+    async def record_tool_invocation(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        tool_name: str,
+        arguments_hash: str,
+        status: str,
+        latency_ms: int,
+    ) -> None:
+        self._owned(context, conversation_id)  # you may only audit inside your own thread
+        self._audit.append(
+            {
+                "conversation_id": conversation_id,
+                "user_id": context.subject,
+                "tenant_id": context.tenant_id,
+                "tool_name": tool_name,
+                "arguments_hash": arguments_hash,
+                "status": status,
+                "latency_ms": latency_ms,
+                "created_at": self._clock(),
+            }
+        )
+
+    @property
+    def audit_records(self) -> list[dict[str, object]]:
+        """Exposed for tests: the audit trail as recorded."""
+        return list(self._audit)

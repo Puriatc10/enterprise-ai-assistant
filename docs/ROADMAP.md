@@ -94,17 +94,26 @@ persisted and replayed; tests run with no network and no real key.
 
 ---
 
-## Phase 3 — Tool Registry and Execution
+## Phase 3 — Tool Registry and Execution ✅
 
-- Registry: tool declaration (name, description, argument model, output model, required
-  scopes), startup validation, allowlist.
-- Argument validation and identity injection rules.
-- Execution: timeout, result validation, structured error taxonomy, audit record.
-- Orchestration loop: multiple tool rounds, round ceiling, partial-answer behavior.
-- The four initial tools wired to the **mock** connector.
+- ✅ Registry: tool declaration (name, description, argument model, output model, required
+  scopes), startup validation, allowlist. `app/application/tools/registry.py`.
+- ✅ Argument validation and identity injection rules — arguments are Pydantic models with
+  `extra="forbid"`, and identity is passed to the handler as `AuthContext`, never accepted
+  as an argument. `app/application/tools/executor.py`.
+- ✅ Execution: timeout, result validation, structured error taxonomy, audit record
+  (`tool_invocations`, arguments stored as a SHA-256 hash).
+- ✅ Orchestration loop: multiple tool rounds, round ceiling (3), stated partial answer.
+- ✅ The four initial tools wired to the **mock** connector —
+  `get_my_policy_count`, `get_my_policies`, `get_policy_details`, `get_policy_status`.
 
-Exit criteria: every negative test in `SECURITY.md` §10 passes; the mock question
-("چند بیمه‌نامه دارم؟") is answered with a number derived from a tool result.
+Exit criteria met: the negative cases from `SECURITY.md` §10 are covered by tests
+(unknown tool, scope refusal, smuggled identity field, timeout, handler crash, foreign
+policy id), and "چند بیمه‌نامه دارم؟" is answered from a tool result — verified against a
+live model in Phase 1 and against the fake adapter in the suite (129 tests).
+
+Open follow-up: the authenticated round-trip against real Supabase data needs a login
+and lands with the frontend in Phase 5.
 
 ---
 

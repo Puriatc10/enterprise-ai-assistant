@@ -16,9 +16,12 @@ so prompt changes are reviewable in one place.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 
+from app.application.tools.executor import ExecutionRecord, ToolExecutor, tool_message
+from app.application.tools.registry import ToolRegistry
 from app.domain.interfaces.llm import LLMPort
 from app.domain.interfaces.repository import ConversationRepository
 from app.domain.models.auth import AuthContext
@@ -43,6 +46,14 @@ SYSTEM_PROMPT = (
 
 DEFAULT_HISTORY_LIMIT = 50
 DEFAULT_TITLE_LENGTH = 60
+#: Hard ceiling on tool rounds per turn. Hitting it produces a stated partial answer —
+#: never an unbounded loop against a paid provider.
+DEFAULT_MAX_TOOL_ROUNDS = 3
+
+#: Said when the loop runs out of rounds. Deliberately honest about the limitation.
+PARTIAL_ANSWER_FALLBACK = (
+    "نتوانستم پاسخ را کامل از داده‌ها استخراج کنم. لطفاً سؤال را دقیق‌تر یا ساده‌تر بپرسید."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,18 +75,24 @@ def _title_from(text: str, limit: int = DEFAULT_TITLE_LENGTH) -> str:
 
 
 class ChatService:
-    """Coordinates repository and LLM for a single user turn."""
+    """Coordinates repository, tools and LLM for a single user turn."""
 
     def __init__(
         self,
         *,
         repository: ConversationRepository,
         llm: LLMPort,
+        tools: ToolRegistry | None = None,
+        executor: ToolExecutor | None = None,
         history_limit: int = DEFAULT_HISTORY_LIMIT,
+        max_tool_rounds: int = DEFAULT_MAX_TOOL_ROUNDS,
     ) -> None:
         self._repository = repository
         self._llm = llm
+        self._tools = tools
+        self._executor = executor
         self._history_limit = history_limit
+        self._max_tool_rounds = max_tool_rounds
 
     async def send_message(
         self,
@@ -119,24 +136,55 @@ class ChatService:
             conversation_id=conversation.id,
             limit=self._history_limit,
         )
-        request = LLMRequest(
-            messages=(
-                ChatMessage(role="system", content=SYSTEM_PROMPT),
-                *(stored.as_chat_message() for stored in history),
+        messages: list[ChatMessage] = [
+            ChatMessage(role="system", content=SYSTEM_PROMPT),
+            *(stored.as_chat_message() for stored in history),
+        ]
+        offered_tools = self._tools.specs_for(context) if self._tools is not None else ()
+
+        answer = ""
+        exhausted = False
+        model_name = ""
+        usage = None
+        for _ in range(self._max_tool_rounds):
+            response = await self._llm.complete(
+                LLMRequest(messages=tuple(messages), tools=offered_tools)
             )
-        )
+            model_name = response.model
+            usage = response.usage
 
-        response = await self._llm.complete(request)
+            if not response.message.tool_calls:
+                answer = response.message.content.strip()
+                break
 
-        if response.message.tool_calls:
-            # No registry is wired yet (Phase 3). Record it rather than dropping the
-            # call silently: a model inventing tool calls is worth seeing in logs.
-            logger.warning(
-                "model proposed %d tool call(s) but no registry is wired yet; ignoring",
-                len(response.message.tool_calls),
-            )
+            if self._executor is None or not offered_tools:
+                # The model asked for tools that were never offered. That is a defect
+                # worth logging — never something to execute, never an answer.
+                logger.warning(
+                    "model proposed %d tool call(s) but no tools are offered",
+                    len(response.message.tool_calls),
+                )
+                break
 
-        answer = response.message.content.strip()
+            messages.append(response.message)
+            for call in response.message.tool_calls:
+                record = await self._executor.execute(call=call, context=context)
+                await self._record_audit(context, conversation.id, record)
+                # The tool result is data for the model to read, never an instruction.
+                messages.append(
+                    ChatMessage(
+                        role="tool",
+                        content=json.dumps(tool_message(record), ensure_ascii=False),
+                        tool_call_id=call.id,
+                    )
+                )
+        else:
+            exhausted = True
+
+        if exhausted:
+            logger.warning("tool round limit reached rounds=%d", self._max_tool_rounds)
+            answer = PARTIAL_ANSWER_FALLBACK
+
         if not answer:
             # Do not persist an empty assistant turn: it would replay as a blank
             # message and make the conversation look broken forever.
@@ -151,9 +199,38 @@ class ChatService:
         return TurnResult(
             conversation_id=conversation.id,
             answer=answer,
-            model=response.model,
-            usage=response.usage,
+            model=model_name,
+            usage=usage,
         )
+
+    async def _record_audit(
+        self,
+        context: AuthContext,
+        conversation_id: str,
+        record: ExecutionRecord,
+    ) -> None:
+        """Write the tool audit line.
+
+        A failure here is logged loudly but does not fail the turn: the user already
+        has their answer, and losing the answer because a log insert failed would be
+        worse than a missing audit row that the error log points at.
+        """
+        try:
+            await self._repository.record_tool_invocation(
+                context=context,
+                conversation_id=conversation_id,
+                tool_name=record.result.tool,
+                arguments_hash=record.arguments_hash,
+                status=record.result.status.value,
+                latency_ms=record.latency_ms,
+            )
+        except Exception:  # noqa: BLE001 - see docstring
+            logger.error(
+                "tool audit write failed tool=%s conversation=%s",
+                record.result.tool,
+                conversation_id,
+                exc_info=True,
+            )
 
 
 class EmptyAnswerError(Exception):

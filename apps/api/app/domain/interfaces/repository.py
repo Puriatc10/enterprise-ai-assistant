@@ -79,3 +79,21 @@ class ConversationRepository(Protocol):
     ) -> list[StoredMessage]:
         """The conversation's turns in chronological order."""
         ...
+
+    async def record_tool_invocation(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        tool_name: str,
+        arguments_hash: str,
+        status: str,
+        latency_ms: int,
+    ) -> None:
+        """Append one audit record for a tool call.
+
+        Stores a hash of the arguments, never the arguments themselves: the trail
+        answers "what ran, when, how long, what happened" without becoming a second
+        copy of customer data (SECURITY.md §8).
+        """
+        ...

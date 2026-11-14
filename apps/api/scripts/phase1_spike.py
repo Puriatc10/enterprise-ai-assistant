@@ -31,6 +31,7 @@ import os
 import sys
 import time
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 MODEL = os.getenv("LLM_MODEL", "gemini/gemini-3.5-flash-lite")
@@ -203,6 +204,27 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     return {"status": "invalid_request", "message": f"Unknown tool: {name}"}
 
 
+def load_env_files() -> None:
+    """Read `.env` files the way the app does, so the documented workflow works.
+
+    The script is documented as "put GEMINI_API_KEY in apps/api/.env", so it must
+    actually read that file: developers should not have to `export` a key by hand.
+    Repository-root `.env` is checked too, matching `Settings.env_file`.
+    Existing environment variables always win, so CI/runner values are never
+    overwritten by a local file.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:  # python-dotenv ships with pydantic-settings; be defensive.
+        return
+
+    api_dir = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[3]
+    for candidate in (api_dir / ".env", repo_root / ".env"):
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+
+
 def require_credentials() -> str | None:
     """Return an API key if one is configured, else None (and say why)."""
     key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -233,12 +255,15 @@ def run_case(completion: Any, case: Case) -> CaseResult:
 
     try:
         for round_index in range(1, MAX_TOOL_ROUNDS + 1):
+            # No `temperature`: Gemini 3.x rejects sampling params outright
+            # (litellm raises UnsupportedParamsError before the request is sent).
+            # Phase 2's adapter must treat temperature as an optional, provider-
+            # mapped parameter rather than a universally supported one.
             response = completion(
                 model=MODEL,
                 messages=messages,
                 tools=TOOLS,
                 tool_choice="auto",
-                temperature=0.0,
                 timeout=TIMEOUT_SECONDS,
             )
             result.rounds = round_index
@@ -290,7 +315,23 @@ def run_case(completion: Any, case: Case) -> CaseResult:
             )
 
     except Exception as exc:  # noqa: BLE001 - a spike reports, it does not crash
-        result.error = f"{type(exc).__name__}: {exc}"
+        message = f"{type(exc).__name__}: {exc}"
+        lowered = message.lower()
+        # Turn the two setup failures everyone hits into an instruction, not a wall
+        # of provider JSON.
+        if "free tier is not available" in lowered or "billing" in lowered:
+            message = (
+                "PROVIDER SETUP: this Google project has no Gemini free tier. Enable "
+                "billing at https://aistudio.google.com/billing for the paid tier, or "
+                "point LLM_MODEL at another provider. Provider said: " + message[:220]
+            )
+        elif "location is not supported" in lowered:
+            message = (
+                "PROVIDER SETUP: the Gemini API refuses this client's region. Run the "
+                "llm-spike workflow on GitHub Actions instead. Provider said: "
+                + message[:220]
+            )
+        result.error = message
         result.latency_ms = int((time.perf_counter() - started) * 1000)
 
     return result
@@ -305,12 +346,19 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Emit only the JSON trace.")
     args = parser.parse_args()
 
+    load_env_files()
+
     key = require_credentials()
     if key is None:
         return 0
 
     try:
-        from litellm import completion
+        import litellm  # type: ignore[import-not-found]
+        from litellm import completion  # type: ignore[import-not-found]
+
+        # Retries belong to our adapter with an explicit policy, never to the SDK's
+        # defaults: an auth or billing error must fail in seconds, not in minutes.
+        litellm.num_retries = 0
 
         # LiteLLM reads GEMINI_API_KEY itself; pass it explicitly so the script
         # works no matter which of the two accepted names was set.

@@ -146,6 +146,14 @@ Verification date for model/provider facts: **2026-11-14**. Provider-facing numb
   PII on the free tier** (see `SECURITY.md`); quota is per-project and per-model; 429s
   must be handled; latency varies by region (relevant for Iran-based usage — verify
   reachability in Phase 1).
+- **Observed in Phase 1 (2026-11-14)**: a valid AI Studio key on this project returns
+  `403 PERMISSION_DENIED — "The Gemini API free tier is not available for this project"`.
+  The published free tier is therefore not universally available: eligibility is
+  per-project/region, and the paid tier (billing enabled) is required here. Network
+  reachability from Iran was fine (IPv4, 1.7 s), so the restriction is tier-level, not IP.
+  Also: **Gemini 3.x rejects `temperature`** (`UnsupportedParamsError` before the HTTP
+  call), so an adapter must treat sampling parameters as optional. Details and the
+  resulting rules: `docs/analysis/PHASE1-LLM.md`.
 - **Status**: MVP-required. Docs: <https://ai.google.dev/gemini-api/docs> ·
   pricing <https://ai.google.dev/gemini-api/docs/pricing> ·
   rate limits <https://ai.google.dev/gemini-api/docs/rate-limits>

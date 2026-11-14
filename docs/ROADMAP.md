@@ -43,10 +43,12 @@ them. This phase produces findings, not features.
   is contract-gated and issuance-oriented. Decision recorded in
   `docs/decisions/ADR-0002-didar24-access-path.md`, evidence in
   `docs/analysis/PHASE1-DIDAR24.md`. The mock connector is therefore the primary data path.
-- Create a **Gemini API key** manually (human action) and confirm access to
-  `gemini/gemini-3.5-flash-lite` from this network.
+- ✅ Create a **Gemini API key** manually (done — key authenticates) — but the project has
+  **no free tier**: `403 PERMISSION_DENIED` until billing is enabled. Provider route is an
+  open decision (`docs/analysis/PHASE1-LLM.md` §4).
 - Test **function calling through LiteLLM** with one trivial tool: does the model return a
   well-formed tool call, and does it survive a second round with the tool result?
+  (Spike is built and hermetically tested; the live run is blocked on the tier decision.)
 - Validate **Persian question understanding**: intent → correct tool choice, including a
   question that should *not* call a tool.
 - Prove the **mock `get_my_policy_count()`** path end to end in a script (no API, no UI).

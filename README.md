@@ -208,6 +208,7 @@ the application database is logically separate from connector data sources.
 | Frontend typecheck | `cd apps/web && npm run typecheck` |
 | Frontend build | `cd apps/web && npm run build` |
 | Whole stack | `docker compose up --build` |
+| Tool-calling spike (needs a Gemini key) | `cd apps/api && uv sync --extra llm && uv run --extra llm python scripts/phase1_spike.py` |
 
 ### Continuous integration
 

@@ -1,0 +1,72 @@
+name: LLM spike (manual)
+
+# Deliberately manual: real provider calls cost money, are non-deterministic, and
+# need a secret. CI (`ci.yml`) stays hermetic with no network and no key, so a
+# provider outage can never turn a commit red for the wrong reason.
+#
+# Run it from the Actions tab, or:
+#   gh workflow run llm-spike.yml -f question="چند بیمه‌نامه دارم؟"
+on:
+  workflow_dispatch:
+    inputs:
+      question:
+        description: "Persian question to send (empty = run the full case set)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    name: live tool-calling spike
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      # Never fail the run just because the secret is not configured yet: report
+      # it as a notice and skip, so the workflow stays browsable.
+      - name: Check for the API key
+        id: key
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "${GEMINI_API_KEY}" ]; then
+            echo "::notice title=No API key::Repository secret GEMINI_API_KEY is not set; skipping the live call."
+            echo "have_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install the LLM stack
+        if: steps.key.outputs.have_key == 'true'
+        run: uv sync --frozen --extra llm --python 3.12
+
+      - name: Run the spike
+        if: steps.key.outputs.have_key == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -n "${{ inputs.question }}" ]; then
+            uv run --extra llm python scripts/phase1_spike.py --question "${{ inputs.question }}"
+          else
+            uv run --extra llm python scripts/phase1_spike.py
+          fi
+
+      - name: Keep the trace
+        if: steps.key.outputs.have_key == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-spike-trace
+          path: apps/api/**/*.txt
+          if-no-files-found: ignore
+          retention-days: 14

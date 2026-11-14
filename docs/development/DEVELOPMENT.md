@@ -99,6 +99,32 @@ Postgres for *connector* work in Phase 4, add it there — never as the applicat
 validates the Dockerfiles. Both images are built and smoke-tested in CI (`.github/
 workflows/ci.yml`), which is the authoritative check when a local registry is blocked.
 
+## Database (Supabase)
+
+The schema lives in `supabase/migrations/` and is applied **by hand** for now: there is no
+migration runner wired, and the project deliberately holds no privileged key that could
+apply one.
+
+1. Open the dev project → **SQL Editor**.
+2. Paste `supabase/migrations/0001_init.sql` and run it. It is idempotent.
+3. Verify the policies exist (expect 12 rows across 3 tables):
+
+```sql
+select tablename, policyname, cmd
+from pg_policies where schemaname = 'public' order by tablename, policyname;
+```
+
+4. Prove `anon` is locked out — this is the point of the design, not a failure:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "apikey: $SUPABASE_ANON_KEY" "$SUPABASE_URL/rest/v1/conversations?select=*"
+# 401 with Postgres code 42501 = the table exists and anon has no grant. Correct.
+```
+
+A `200` with rows here would mean RLS or the grants are wrong. The backend never uses a
+service key, so it sees exactly what a signed-in user sees.
+
 ## Configuration rules
 
 - Settings are defined once, in `app/core/config.py` (Pydantic Settings).

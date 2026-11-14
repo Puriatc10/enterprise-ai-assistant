@@ -32,7 +32,7 @@ Explicitly not here: chat, LLM calls, connectors, Supabase schema, deployment.
 
 ---
 
-## Phase 1 — Technical Validation 🔄 (in progress)
+## Phase 1 — Technical Validation ✅
 
 **Goal**: retire the unknowns that could invalidate the architecture, before building on
 them. This phase produces findings, not features.
@@ -43,18 +43,25 @@ them. This phase produces findings, not features.
   is contract-gated and issuance-oriented. Decision recorded in
   `docs/decisions/ADR-0002-didar24-access-path.md`, evidence in
   `docs/analysis/PHASE1-DIDAR24.md`. The mock connector is therefore the primary data path.
-- ✅ Create a **Gemini API key** manually (done — key authenticates) — but the project has
-  **no free tier**: `403 PERMISSION_DENIED` until billing is enabled. Provider route is an
-  open decision (`docs/analysis/PHASE1-LLM.md` §4).
-- Test **function calling through LiteLLM** with one trivial tool: does the model return a
-  well-formed tool call, and does it survive a second round with the tool result?
-  (Spike is built and hermetically tested; the live run is blocked on the tier decision.)
-- Validate **Persian question understanding**: intent → correct tool choice, including a
-  question that should *not* call a tool.
-- Prove the **mock `get_my_policy_count()`** path end to end in a script (no API, no UI).
-- Establish a **synthetic insurance dataset** (schema + fixture) with no real data.
-- Record **actual quotas and limitations** (RPM/RPD, latency, failure modes) observed —
-  not the marketing numbers.
+- ✅ Create a **Gemini API key** manually (key authenticates) — but the project has **no free
+  tier**: `403 PERMISSION_DENIED` until billing is enabled. Gemini's own numbers therefore
+  remain unmeasured; the pipeline was validated on a free OpenRouter route instead.
+- ✅ Test **function calling through LiteLLM** — 4/4 cases across two independent runs:
+  tool proposed, executed, result fed back, final answer generated. Per-case latency,
+  rounds and tokens recorded in `docs/analysis/PHASE1-LLM.md`.
+- ✅ Validate **Persian question understanding** — correct tool for a direct and an informal
+  count question; `policy_id` extracted from Persian prose; and the **no-tool control**
+  (chit-chat) held, which is what separates understanding from "always call a tool".
+- ✅ Prove the **mock `get_my_policy_count()`** path end to end — the spike's local executor
+  returned synthetic counts (3 total / 2 active) and the answer was composed from them.
+- ✅ Establish a **synthetic insurance dataset** — three fabricated policies inline in the
+  spike; a proper fixture moves to Phase 3/4 with the connector.
+- ✅ Record **actual quotas and limitations** — Gemini entitlement refusal (project-scoped,
+  not IP), Gemini 3.x rejecting `temperature`, SDK retries masking errors, and OpenRouter
+  free-pool `429`s. All in `docs/analysis/PHASE1-LLM.md` §4.
+
+Carry-over into Phase 2: re-run the same case set against real Gemini once billing exists,
+and test multi-turn context (the spike is single-turn).
 
 Exit criteria: a short findings document with measurements, a working prototype script,
 and a yes/no answer on Didar24. Any architecture change this forces goes through an ADR.

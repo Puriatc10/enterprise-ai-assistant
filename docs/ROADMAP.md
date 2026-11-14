@@ -32,14 +32,17 @@ Explicitly not here: chat, LLM calls, connectors, Supabase schema, deployment.
 
 ---
 
-## Phase 1 — Technical Validation 🔜
+## Phase 1 — Technical Validation 🔄 (in progress)
 
 **Goal**: retire the unknowns that could invalidate the architecture, before building on
 them. This phase produces findings, not features.
 
-- Investigate **Didar24**: is there a documented, authorized read-only API? What
-  authentication, scopes, and rate limits? If not, record the decision to use the mock
-  connector for the demonstration.
+- ✅ Investigate **Didar24** — **answered: no authorized public API.** `didar24.com` is Dey
+  Insurance's customer platform (not the `didar.me` CRM); it has a private, WAF-protected
+  API host, no documentation and no key issuance. The insurer's partner programme (DayPI)
+  is contract-gated and issuance-oriented. Decision recorded in
+  `docs/decisions/ADR-0002-didar24-access-path.md`, evidence in
+  `docs/analysis/PHASE1-DIDAR24.md`. The mock connector is therefore the primary data path.
 - Create a **Gemini API key** manually (human action) and confirm access to
   `gemini/gemini-3.5-flash-lite` from this network.
 - Test **function calling through LiteLLM** with one trivial tool: does the model return a
@@ -90,8 +93,9 @@ Exit criteria: every negative test in `SECURITY.md` §10 passes; the mock questi
 
 - **Mock connector** promoted from a test double to a coherent demonstration source.
 - **PostgreSQL connector**: read-only role, named repository functions, row limits.
-- **Didar24 connector**: only if Phase 1 found an authorized API; otherwise documented as
-  blocked with the mock as the demonstration path.
+- **Didar24 connector**: **blocked by design** — no authorized API exists (ADR-0002). The
+  mock is the documented demonstration path; a real adapter requires a DayPI agreement
+  first, so no code is written against an unpublished contract.
 - **External REST connector**: reusable adapter with fixed endpoint allowlist.
 - Standardized `ConnectorResult` and normalization tests per connector.
 

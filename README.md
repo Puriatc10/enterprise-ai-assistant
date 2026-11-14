@@ -232,6 +232,8 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/architecture/SECURITY.md`](docs/architecture/SECURITY.md) | authn/authz model, tenant isolation, LLM data privacy |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phases 0–6 plus future knowledge retrieval |
 | [`docs/decisions/ADR-0001-initial-architecture.md`](docs/decisions/ADR-0001-initial-architecture.md) | what was decided, and what is still provisional |
+| [`docs/decisions/ADR-0002-didar24-access-path.md`](docs/decisions/ADR-0002-didar24-access-path.md) | why the mock connector is the primary data path |
+| [`docs/analysis/PHASE1-DIDAR24.md`](docs/analysis/PHASE1-DIDAR24.md) | Phase 1 evidence: what Didar24 exposes, and what it does not |
 | [`docs/development/DEVELOPMENT.md`](docs/development/DEVELOPMENT.md) | environment details, ports, troubleshooting |
 | [`AGENTS.md`](AGENTS.md) | rules for AI coding agents working in this repo |
 

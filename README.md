@@ -219,6 +219,7 @@ the application database is logically separate from connector data sources.
 
 | Task | Command |
 |---|---|
+| **Everything CI runs** | `bash scripts/check_all.sh` |
 | Run API (reload) | `cd apps/api && uv run uvicorn app.main:app --reload` |
 | Backend tests | `cd apps/api && uv run pytest` |
 | Lint | `cd apps/api && uv run ruff check .` |

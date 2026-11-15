@@ -60,6 +60,19 @@ class LLMRequest(BaseModel):
     max_tokens: int | None = None
 
 
+class ToolUsage(BaseModel):
+    """One executed tool call, as reported back to the client.
+
+    Carries the tool name, the outcome and the duration — never the arguments or the
+    result. The UI's job is to show that an answer was grounded in real data, not to
+    replay what the user asked about.
+    """
+
+    tool: str
+    status: str
+    latency_ms: int
+
+
 class Conversation(BaseModel):
     """A stored chat thread.
 

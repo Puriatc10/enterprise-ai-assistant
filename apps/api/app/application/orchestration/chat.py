@@ -25,7 +25,7 @@ from app.application.tools.registry import ToolRegistry
 from app.domain.interfaces.llm import LLMPort
 from app.domain.interfaces.repository import ConversationRepository
 from app.domain.models.auth import AuthContext
-from app.domain.models.conversation import ChatMessage, LLMRequest, Usage
+from app.domain.models.conversation import ChatMessage, LLMRequest, ToolUsage, Usage
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,10 @@ class TurnResult:
     answer: str
     model: str
     usage: Usage | None = None
+    #: Tools that actually ran for this answer, in order. Empty when the model answered
+    #: without them — which is also a fact worth showing, so it is not conflated with
+    #: "we do not know".
+    tools_used: tuple[ToolUsage, ...] = ()
 
 
 def _title_from(text: str, limit: int = DEFAULT_TITLE_LENGTH) -> str:
@@ -146,6 +150,7 @@ class ChatService:
         exhausted = False
         model_name = ""
         usage = None
+        tool_usage: list[ToolUsage] = []
         for _ in range(self._max_tool_rounds):
             response = await self._llm.complete(
                 LLMRequest(messages=tuple(messages), tools=offered_tools)
@@ -170,6 +175,13 @@ class ChatService:
             for call in response.message.tool_calls:
                 record = await self._executor.execute(call=call, context=context)
                 await self._record_audit(context, conversation.id, record)
+                tool_usage.append(
+                    ToolUsage(
+                        tool=record.result.tool,
+                        status=record.result.status.value,
+                        latency_ms=record.latency_ms,
+                    )
+                )
                 # The tool result is data for the model to read, never an instruction.
                 messages.append(
                     ChatMessage(
@@ -201,6 +213,7 @@ class ChatService:
             answer=answer,
             model=model_name,
             usage=usage,
+            tools_used=tuple(tool_usage),
         )
 
     async def _record_audit(

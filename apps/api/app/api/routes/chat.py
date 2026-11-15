@@ -54,11 +54,20 @@ class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
 
 
+class ToolUsageResponse(BaseModel):
+    tool: str
+    status: str
+    latency_ms: int
+
+
 class SendMessageResponse(BaseModel):
     conversation_id: str
     answer: str
     model: str
     usage: Usage | None = None
+    #: Present so the UI can show that the answer was grounded, and in what. Deliberately
+    #: excludes arguments and results: the client needs provenance, not a copy of the data.
+    tools_used: list[ToolUsageResponse] = Field(default_factory=list)
 
 
 @router.post(
@@ -149,4 +158,8 @@ async def send_message(
         answer=result.answer,
         model=result.model,
         usage=result.usage,
+        tools_used=[
+            ToolUsageResponse(tool=item.tool, status=item.status, latency_ms=item.latency_ms)
+            for item in result.tools_used
+        ],
     )

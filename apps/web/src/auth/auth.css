@@ -1,0 +1,207 @@
+/* Auth screen + configuration notice.
+   Colours and radii come from :root in styles.css so both screens share one
+   palette; fallbacks keep this file readable if it is ever loaded alone. */
+
+.auth {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: var(--bg, #f6f7f9);
+  color: var(--text, #14181f);
+}
+
+.auth__card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e3e6eb);
+  border-radius: var(--radius, 12px);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth__eyebrow {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--accent, #1f5eff);
+}
+
+.auth__title {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.3;
+}
+
+.auth__subtitle,
+.auth__text,
+.auth__hint {
+  margin: 0;
+  color: var(--muted, #5b6472);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.auth__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.auth__input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e3e6eb);
+  background: var(--bg, #f6f7f9);
+  color: var(--text, #14181f);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth__input::placeholder {
+  color: var(--muted, #5b6472);
+}
+
+.auth__input:focus {
+  outline: none;
+  border-color: var(--accent, #1f5eff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #1f5eff) 22%, transparent);
+}
+
+.auth__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth__input[aria-invalid="true"] {
+  border-color: var(--warn, #b23c17);
+}
+
+.auth__submit {
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 4px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--accent, #1f5eff);
+  color: #ffffff;
+  cursor: pointer;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+.auth__submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.auth__submit:focus-visible {
+  outline: 2px solid var(--accent, #1f5eff);
+  outline-offset: 2px;
+}
+
+.auth__submit:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.auth__error,
+.auth__notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  border: 1px solid transparent;
+}
+
+.auth__error {
+  color: var(--warn, #b23c17);
+  border-color: var(--warn, #b23c17);
+  background: color-mix(in srgb, var(--warn, #b23c17) 8%, transparent);
+}
+
+.auth__notice {
+  color: var(--ok, #10814b);
+  border-color: var(--ok, #10814b);
+  background: color-mix(in srgb, var(--ok, #10814b) 8%, transparent);
+}
+
+.auth__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid var(--border, #e3e6eb);
+  margin-top: 2px;
+  padding-block-start: 12px;
+}
+
+.auth__link {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--accent, #1f5eff);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth__link:focus-visible {
+  outline: 2px solid var(--accent, #1f5eff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.auth__link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.auth__footnote {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--muted, #5b6472);
+}
+
+/* Configuration notice -------------------------------------------------- */
+
+.config-notice__list {
+  margin: 0;
+  padding-inline-start: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-notice code,
+.auth code {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.86em;
+  background: color-mix(in srgb, var(--muted, #5b6472) 14%, transparent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}

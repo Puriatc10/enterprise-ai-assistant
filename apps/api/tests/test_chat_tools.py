@@ -125,3 +125,24 @@ async def test_no_tools_are_offered_when_no_registry_is_configured() -> None:
     await service.send_message(context=ALICE, message="سلام")
 
     assert llm.requests[0].tools == ()
+
+
+async def test_the_turn_reports_which_tools_ran() -> None:
+    """The client shows provenance, so the turn must describe it without the data."""
+    service, _, _ = _service([_proposal("get_my_policy_count"), text_response("۳ بیمه‌نامه")])
+
+    result = await service.send_message(context=ALICE, message="چند بیمه‌نامه دارم؟")
+
+    assert len(result.tools_used) == 1
+    usage = result.tools_used[0]
+    assert usage.tool == "get_my_policy_count"
+    assert usage.status == "ok"
+    assert usage.latency_ms >= 0
+
+
+async def test_answers_without_tools_report_an_empty_tool_list() -> None:
+    service, _, _ = _service([text_response("سلام! چطور کمکت کنم؟")])
+
+    result = await service.send_message(context=ALICE, message="سلام")
+
+    assert result.tools_used == ()

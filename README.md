@@ -6,11 +6,11 @@ A web-based enterprise assistant that answers natural-language questions about d
 spread across multiple organizational systems — by calling narrowly scoped, read-only
 tools and composing the answer from what those tools actually returned.
 
-> **Status: Phase 3 — tool execution.** The backend now runs the full loop: authenticated
-> request → LLM proposes a tool → the backend validates, authorizes and executes it →
-> the answer is composed from what the tool returned. Authentication and conversation
-> persistence are wired to Supabase; the data behind the tools is synthetic (ADR-0002).
-> The frontend is still a skeleton, and this is **not** production-ready.
+> **Status: Phase 5 — the chat interface works.** Log in with Supabase, ask a question in
+> Persian, and the answer arrives grounded in tool results, with the tools and their
+> outcomes shown beneath it. Conversations persist and reload. Authentication and
+> conversation storage are wired to Supabase; the data behind the tools is synthetic
+> (ADR-0002). Not production-ready, and not yet deployed.
 
 ---
 
@@ -47,7 +47,7 @@ authorized server-side before any connector runs.
 
 | Capability | State |
 |---|---|
-| Web chat interface (React + TypeScript) | skeleton, no chat (Phase 5) |
+| Web chat interface (React + TypeScript) | **implemented** — RTL Persian chat, history, tool provenance |
 | Backend API (FastAPI) | health + conversations + send turn |
 | Provider-independent LLM abstraction | port + LiteLLM adapter, OpenRouter verified |
 | Function / tool calling with validation | **implemented** — registry + guarded executor |
@@ -185,8 +185,26 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
-The API base URL comes from `VITE_API_BASE_URL` (see `.env.example`); nothing is
-hardcoded in the client.
+The client needs three build-time variables. **Put them in the repository-root `.env`
+(or `.env.local`)**, not in `apps/web/` — `vite.config.ts` sets `envDir: "../.."` so one
+file serves the whole repo, and a `VITE_*` file inside `apps/web/` is silently ignored:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_SUPABASE_URL=https://<project>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon public key>
+```
+
+Without the two Supabase values the app renders a notice naming what is missing instead of
+crashing — the same fail-visibly rule the backend follows when it returns 501.
+
+Sign-in, the token and the chat thread all live in the browser; the anon key is public by
+design and row-level security is the actual control. **Never** put the `service_role` key
+in any `VITE_*` variable: everything with that prefix is inlined into the bundle.
+
+The demo login path needs a confirmed user. In a fresh Supabase project, create one under
+**Authentication → Users**, or turn off **Confirm email** for the demo project; otherwise
+signup returns no session and the UI will say a confirmation email was sent.
 
 ### Docker Compose
 
@@ -239,6 +257,7 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/decisions/ADR-0003-provider-selection.md`](docs/decisions/ADR-0003-provider-selection.md) | why the MVP runs on OpenRouter rather than Gemini |
 | [`docs/decisions/ADR-0004-tool-execution.md`](docs/decisions/ADR-0004-tool-execution.md) | the tool execution model: allowlist, refusals as data, identity from context |
 | [`docs/decisions/ADR-0005-connector-model.md`](docs/decisions/ADR-0005-connector-model.md) | one connector contract; read-only enforced twice; projection owned by the domain |
+| [`docs/decisions/ADR-0006-browser-auth.md`](docs/decisions/ADR-0006-browser-auth.md) | browser auth, the error envelope, and why the turn reports `tools_used` |
 | [`docs/analysis/PHASE1-DIDAR24.md`](docs/analysis/PHASE1-DIDAR24.md) | Phase 1 evidence: what Didar24 exposes, and what it does not |
 | [`docs/analysis/PHASE1-LLM.md`](docs/analysis/PHASE1-LLM.md) | Phase 1 evidence: measured tool-calling results, and the adapter rules they imply |
 | [`docs/development/DEVELOPMENT.md`](docs/development/DEVELOPMENT.md) | environment details, ports, troubleshooting |

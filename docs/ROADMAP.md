@@ -163,16 +163,24 @@ without orchestration changes.
 ---
 
 
-## Phase 5 — Frontend and End-to-End Integration
+## Phase 5 — Frontend and End-to-End Integration ✅
 
-- Chat UI: message list, composer, loading/error states, RTL-correct Persian layout.
-- Auth screens and token handling (memory + refresh, or httpOnly cookie — decided here).
-- Conversation history list; resume a conversation.
-- Tool-execution feedback ("checking your policies…") without leaking internals.
-- Persian response presentation; number/date formatting via `Intl`.
+- ✅ Chat UI: conversation sidebar, message thread, composer, loading/error/empty states,
+  RTL-correct Persian layout (`apps/web/src/features/chat/`).
+- ✅ Auth screens and token handling: `supabase-js` holds the session, refreshes it, and
+  every API call carries `Authorization: Bearer …` (ADR-0006). No token is ever stored by
+  application code; a 401 is treated as an expired session, not a failed message.
+- ✅ Conversation history list; reopening a conversation reloads its messages.
+- ✅ Tool-execution feedback: the turn returns `tools_used: [{tool, status, latency_ms}]`
+  and the UI renders it under the answer — names and outcomes only, no arguments or rows.
+- ✅ Persian response presentation; dates via `Intl` (`fa-IR`); tool names, model ids and
+  request ids forced LTR inside the RTL layout.
 
-Exit criteria: a user can log in, ask a Persian question, see a grounded answer, and
-reload the conversation.
+Exit criteria partially met: a user can log in, ask a Persian question and see a grounded
+answer with its tool provenance — **once the Supabase project has a confirmed user.** The
+code path is verified (a real `POST /auth/v1/token` to the project returns the mapped
+Persian error for bad credentials), but no confirmed test user exists yet, so the full
+login → answer → reload journey has not been walked end to end.
 
 ---
 

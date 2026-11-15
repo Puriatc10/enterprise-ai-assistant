@@ -1,0 +1,736 @@
+/* Chat feature styles.
+ *
+ * Colours come from the tokens declared in src/styles.css (--bg, --surface,
+ * --border, --text, --muted, --accent, --ok, --warn, --radius) so the chat
+ * inherits the existing light/dark scheme instead of inventing a second palette.
+ * That file is not edited here; this one only consumes it.
+ *
+ * RTL-first: `dir="rtl"` is set on the shell, so every logical property below
+ * (inline-start / inline-end / margin-inline-*) resolves to the right-hand side
+ * first. Physical-only cases are marked where they are unavoidable.
+ */
+
+.boot {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.boot__text {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* ---------- shell ---------- */
+
+.chat-shell {
+  display: grid;
+  /* Sidebar column comes first, which in RTL puts it on the right. */
+  grid-template-columns: 300px minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.chat-shell :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chat-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.chat-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- sidebar ---------- */
+
+.chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
+}
+
+.chat-sidebar__inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.chat-sidebar__head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 12px;
+  border-block-end: 1px solid var(--border);
+}
+
+.chat-sidebar__brand {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.chat-sidebar__new {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: center;
+}
+
+.chat-sidebar__new:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.chat-sidebar__new:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-sidebar__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 8px;
+}
+
+.chat-sidebar__note {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.chat-conv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-conv {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.chat-conv:hover {
+  background: var(--bg);
+}
+
+.chat-conv.is-active {
+  background: var(--surface);
+  border-color: var(--border);
+  font-weight: 600;
+}
+
+.chat-conv.is-active::before {
+  content: "";
+  /* Marks the open thread without relying on colour alone. */
+  display: inline-block;
+  width: 3px;
+  height: 1.05em;
+  border-radius: 2px;
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+
+.chat-conv__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-conv__date {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-sidebar__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-block-start: 1px solid var(--border);
+}
+
+.chat-sidebar__account {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+
+.chat-sidebar__account-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.chat-sidebar__email {
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-sidebar__signout {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chat-sidebar__signout:hover:not(:disabled) {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.chat-sidebar__signout:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- main column ---------- */
+
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chat-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-topbar__title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-topbar__toggle {
+  /* Desktop keeps the sidebar visible; the toggle only exists for narrow screens. */
+  display: none;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* ---------- thread ---------- */
+
+.chat-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-thread__status {
+  margin: 0;
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.chat-thread__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-msg {
+  display: flex;
+}
+
+/* In RTL the main axis starts at the right: the assistant answers at the start
+   (right edge, full width) and the user's own words sit at the end (left), which
+   is the mirror of what a Persian reader expects from a chat app. */
+.chat-msg--assistant {
+  justify-content: flex-start;
+}
+
+.chat-msg--user {
+  justify-content: flex-end;
+}
+
+.chat-msg__bubble {
+  max-width: min(88%, 52rem);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.chat-msg--user .chat-msg__bubble {
+  max-width: min(78%, 40rem);
+  background: var(--surface);
+  /* Fallback above; the tint is decoration, never the only signal. */
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+}
+
+.chat-msg__role {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.chat-msg__time {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.chat-msg__text {
+  margin: 0;
+  /* Keeps the model's paragraph breaks: collapsing them turns a list into a blob. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+  text-align: start;
+}
+
+.chat-msg__bubble--pending {
+  border-style: dashed;
+}
+
+.chat-msg__thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.chat-msg__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: chat-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes chat-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.chat-msg--meta {
+  justify-content: center;
+}
+
+.chat-msg__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chat-msg__meta-role {
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+}
+
+/* ---------- empty state ---------- */
+
+.chat-empty {
+  max-width: 46rem;
+  margin: 6vh auto 0;
+  text-align: center;
+}
+
+.chat-empty h2 {
+  margin: 0 0 8px;
+  font-size: 1.08rem;
+}
+
+.chat-empty p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.chat-empty__hint {
+  font-size: 0.86rem;
+}
+
+.chat-empty__chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.chat-chip {
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chat-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- footer: tools + composer ---------- */
+
+.chat-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 20px 14px;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.chat-tools__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-tools__name {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.chat-tools__status {
+  color: var(--warn);
+}
+
+.chat-tools__status--ok {
+  color: var(--ok);
+}
+
+.chat-tools__latency {
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+/* The textarea itself has no ring; the wrapper carries it so the focus state
+   traces the whole input box instead of one line inside it. */
+.chat-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.chat-composer__input {
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  min-height: 3.2rem;
+  max-height: 12rem;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+}
+
+.chat-composer__input:focus-visible {
+  outline: none;
+}
+
+.chat-composer__input::placeholder {
+  color: var(--muted);
+}
+
+.chat-composer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-composer__hint {
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.chat-composer__counter {
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-composer__counter.is-full {
+  color: var(--warn);
+}
+
+.chat-composer__send {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 6px 18px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  /* --surface flips with the theme, so this stays readable on --accent in both. */
+  background: var(--accent);
+  color: var(--surface);
+  cursor: pointer;
+}
+
+.chat-composer__send:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.chat-composer__send:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- error banner ---------- */
+
+.chat-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--surface);
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface));
+}
+
+.chat-error__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.chat-error__detail {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.chat-error__trace {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.chat-error__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-error__action {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 4px 12px;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--warn);
+  cursor: pointer;
+}
+
+.chat-error__action--ghost {
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+/* ---------- mobile ---------- */
+
+.chat-scrim {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .chat-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat-sidebar {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 20;
+    width: min(85vw, 320px);
+    /* Physical translate: the drawer sits at the inline-end edge, so pushing it
+       off that edge is always +X in both directions. */
+    transform: translateX(100%);
+    visibility: hidden;
+    box-shadow: 0 0 0 1px var(--border);
+    transition:
+      transform 0.18s ease,
+      visibility 0.18s ease;
+  }
+
+  .chat-sidebar.is-open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .chat-scrim.is-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    padding: 0;
+    border: 0;
+    background: rgb(10 12 16 / 45%);
+    cursor: pointer;
+  }
+
+  .chat-topbar__toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .chat-topbar {
+    padding: 10px 14px;
+  }
+
+  .chat-thread {
+    padding: 14px 14px 6px;
+  }
+
+  .chat-footer {
+    padding: 8px 14px 12px;
+  }
+
+  .chat-error {
+    margin: 10px 14px 0;
+  }
+
+  .chat-msg__bubble,
+  .chat-msg--user .chat-msg__bubble {
+    max-width: 92%;
+  }
+
+  .chat-empty {
+    margin-top: 4vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-msg__dot {
+    animation: none;
+  }
+
+  .chat-sidebar {
+    transition: none;
+  }
+}

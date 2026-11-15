@@ -117,15 +117,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Everything with a VITE_ prefix ends up in a public bundle. Fail the build
-      # if a credential-shaped string ever reaches dist/.
-      - name: No secrets in the production bundle
-        run: |
-          if grep -rEI "AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9]{20,}|service_role|SUPABASE_SERVICE" dist/; then
-            echo "::error::Credential-shaped string found in the built bundle"
-            exit 1
-          fi
-          echo "bundle clean"
+      # Everything with a VITE_ prefix ends up in a public bundle. Scan for credential
+      # *shapes* (an anon key is expected; a service_role JWT or provider key is not).
+      - name: No credentials in the production bundle
+        run: python3 "${{ github.workspace }}/scripts/check_bundle_secrets.py" "${{ github.workspace }}/apps/web/dist"
 
   docker:
     name: docker · build images + smoke test

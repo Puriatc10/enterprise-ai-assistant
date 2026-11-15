@@ -71,9 +71,7 @@ def test_login_to_grounded_answer_to_reload(journey: tuple) -> None:
     assert created.status_code == 201
     conversation_id = created.json()["id"]
 
-    answer = client.post(
-        f"/conversations/{conversation_id}/messages", json={"content": QUESTION}
-    )
+    answer = client.post(f"/conversations/{conversation_id}/messages", json={"content": QUESTION})
     assert answer.status_code == 200
     body = answer.json()
 
@@ -123,9 +121,7 @@ def test_the_model_cannot_name_another_user(journey: tuple) -> None:
     ]
     conversation_id = client.post("/conversations", json={}).json()["id"]
 
-    response = client.post(
-        f"/conversations/{conversation_id}/messages", json={"content": QUESTION}
-    )
+    response = client.post(f"/conversations/{conversation_id}/messages", json={"content": QUESTION})
 
     assert response.status_code == 200
     assert response.json()["tools_used"][0]["status"] == "invalid_request"
@@ -137,9 +133,7 @@ def test_another_user_cannot_read_the_conversation(journey: tuple) -> None:
 
     actor["current"] = BOB
     read = client.get(f"/conversations/{conversation_id}/messages")
-    write = client.post(
-        f"/conversations/{conversation_id}/messages", json={"content": QUESTION}
-    )
+    write = client.post(f"/conversations/{conversation_id}/messages", json={"content": QUESTION})
 
     # Identical response for "not yours" and "does not exist": no existence oracle.
     assert read.status_code == 404

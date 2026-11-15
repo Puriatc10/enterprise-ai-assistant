@@ -77,7 +77,7 @@ export interface SendMessageResult {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   /** JSON body. Never set for GET: a body on GET is rejected by some proxies. */
   body?: unknown;
   token?: string;
@@ -268,6 +268,26 @@ export function createConversation(token: string, title?: string): Promise<Conve
     token,
     body: trimmed.length > 0 ? { title: trimmed } : {},
   });
+}
+
+/** PATCH a conversation's title. The server strips it and rejects a blank one (422). */
+export function renameConversation(
+  token: string,
+  conversationId: string,
+  title: string,
+): Promise<Conversation> {
+  const id = encodeURIComponent(conversationId);
+  return request<Conversation>(`/conversations/${id}`, {
+    method: "PATCH",
+    token,
+    body: { title: title.trim() },
+  });
+}
+
+/** DELETE a conversation. Another user's id answers 404, never 403. */
+export function deleteConversation(token: string, conversationId: string): Promise<void> {
+  const id = encodeURIComponent(conversationId);
+  return request<void>(`/conversations/${id}`, { method: "DELETE", token });
 }
 
 export function listMessages(token: string, conversationId: string): Promise<ChatMessage[]> {

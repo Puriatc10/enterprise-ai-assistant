@@ -23,7 +23,7 @@ export interface StreamHandlers {
    * The authoritative final answer, sent once per successful turn. Never called
    * after an `error` event and never called at all if the turn was aborted.
    */
-  onDone: (answer: string, conversationId: string) => void;
+  onDone: (answer: string, conversationId: string, title: string | null) => void;
 }
 
 /** Persian copy for a failure that carried no readable envelope. */
@@ -194,7 +194,11 @@ function handleFrame(frame: SseFrame, handlers: StreamHandlers, state: FrameStat
       const answer = typeof payload.answer === "string" ? payload.answer : "";
       const conversationId =
         typeof payload.conversation_id === "string" ? payload.conversation_id : "";
-      handlers.onDone(answer, conversationId);
+      // The title the turn gave the thread, when it named one. Applying it locally is the
+      // only race-free way to update the sidebar: a refetch issued here can still read the
+      // row as it was before the write landed.
+      const title = typeof payload.title === "string" ? payload.title : null;
+      handlers.onDone(answer, conversationId, title);
       return;
     }
     case "error": {

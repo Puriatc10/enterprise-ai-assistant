@@ -30,8 +30,17 @@ fi
 API_PID=""
 WEB_PID=""
 cleanup() {
-  [ -n "$API_PID" ] && kill "$API_PID" 2>/dev/null || true
-  [ -n "$WEB_PID" ] && kill "$WEB_PID" 2>/dev/null || true
+  # Kill the whole tree. `uvicorn --reload` runs the app in a child process, so killing
+  # only the parent leaves that child holding the port — the next `dev.sh` then fails with
+  # "address already in use" while nothing visible is running.
+  for pid in "$API_PID" "$WEB_PID"; do
+    [ -z "$pid" ] && continue
+    if command -v cmd >/dev/null 2>&1; then
+      cmd //c "taskkill /F /T /PID $pid" >/dev/null 2>&1 || kill "$pid" 2>/dev/null || true
+    else
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
 }
 trap cleanup EXIT INT TERM
 

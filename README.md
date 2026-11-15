@@ -47,7 +47,7 @@ authorized server-side before any connector runs.
 
 | Capability | State |
 |---|---|
-| Web chat interface (React + TypeScript) | **implemented** — RTL Persian chat, SSE streaming, markdown, history, tool provenance, dark mode |
+| Web chat interface (React + TypeScript) | **implemented** — RTL Persian chat, SSE streaming, markdown, model-written titles, rename/delete, tool provenance, dark mode |
 | Backend API (FastAPI) | health + conversations + send turn |
 | Provider-independent LLM abstraction | port + LiteLLM adapter, OpenRouter verified |
 | Function / tool calling with validation | **implemented** — registry + guarded executor |

@@ -272,6 +272,8 @@ export function ChatPage({ token, email, onSignOut }: ChatPageProps): JSX.Elemen
           conversations={chat.conversations}
           activeId={chat.activeConversationId}
           onSelect={chat.selectConversation}
+          onRename={chat.renameConversation}
+          onDelete={chat.deleteConversation}
           onCreate={() => {
             closeSidebar();
             void chat.startConversation();

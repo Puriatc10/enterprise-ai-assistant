@@ -54,6 +54,21 @@ says so: «ثبت‌نام انجام شد. یک ایمیل تأیید برای 
 Use an address you can actually open, click the link in the message, then sign in. There is
 no anonymous path and none should be enabled — identity is the whole authorization model.
 
+**The link goes wherever the project is configured to send it.** The client sends
+`emailRedirectTo: window.location.origin`, but Supabase only honours a redirect that is on
+the project's allowlist; otherwise it silently uses the **Site URL**. Measured on this
+project before the fix: the mail contained `redirect_to=http://localhost:3000`.
+
+Set both, once, in **Authentication → URL Configuration**:
+
+| Field | Value |
+|---|---|
+| Site URL | the deployed origin (`https://<your-site>.onrender.com`) |
+| Redirect URLs | `http://localhost:5173` **and** the deployed origin |
+
+Adding the Render origin is part of going live: deploying the app does not change these
+settings by itself.
+
 ## Backend
 
 ```bash

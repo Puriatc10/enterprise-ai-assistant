@@ -72,3 +72,23 @@ def test_cors_does_not_allow_an_unknown_origin(client: TestClient) -> None:
     )
 
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_allows_the_methods_the_client_actually_uses(client: TestClient) -> None:
+    """Rename and delete are PATCH/DELETE, which a browser sends as a preflighted request.
+
+    This existed as a real bug: the routes were added, the API tests called them directly,
+    and the browser could not — ``allow_methods`` still said GET/POST/OPTIONS, so every
+    rename failed as a "network" error with no server-side trace to explain it.
+    """
+    for method in ("PATCH", "DELETE"):
+        response = client.options(
+            "/conversations/abc",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": method,
+            },
+        )
+        assert response.status_code == 200, method
+        allowed = response.headers["access-control-allow-methods"]
+        assert method in allowed, f"{method} missing from {allowed}"

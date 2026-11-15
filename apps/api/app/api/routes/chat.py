@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, StringConstraints
 
 from app.application.orchestration.chat import ChatService, EmptyAnswerError
+from app.application.orchestration.naming import LLMConversationNamer
 from app.core.dependencies import (
     AuthContextDep,
     ConversationRepositoryDep,
@@ -99,6 +100,9 @@ class SendMessageResponse(BaseModel):
     #: Present so the UI can show that the answer was grounded, and in what. Deliberately
     #: excludes arguments and results: the client needs provenance, not a copy of the data.
     tools_used: list[ToolUsageResponse] = Field(default_factory=list)
+    #: Present when this turn named the conversation, so a client can update its list
+    #: without a second request. ``None`` means "nothing changed", not "no title".
+    conversation_title: str | None = None
 
 
 @router.post(
@@ -221,7 +225,13 @@ async def send_message(
     limiter: RateLimiterDep,
 ) -> SendMessageResponse:
     _enforce_rate_limit(limiter, context)
-    service = ChatService(repository=repository, llm=llm, tools=tools, executor=executor)
+    service = ChatService(
+        repository=repository,
+        llm=llm,
+        tools=tools,
+        executor=executor,
+        namer=LLMConversationNamer(llm),
+    )
     result = await service.send_message(
         context=context,
         message=payload.content,
@@ -236,6 +246,7 @@ async def send_message(
             ToolUsageResponse(tool=item.tool, status=item.status, latency_ms=item.latency_ms)
             for item in result.tools_used
         ],
+        conversation_title=result.title,
     )
 
 
@@ -320,7 +331,13 @@ async def stream_message(
     # not an error event inside a 200 response.
     await repository.get(context=context, conversation_id=conversation_id)
 
-    service = ChatService(repository=repository, llm=llm, tools=tools, executor=executor)
+    service = ChatService(
+        repository=repository,
+        llm=llm,
+        tools=tools,
+        executor=executor,
+        namer=LLMConversationNamer(llm),
+    )
 
     async def events() -> AsyncIterator[str]:
         try:

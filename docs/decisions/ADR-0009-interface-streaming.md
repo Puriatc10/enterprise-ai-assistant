@@ -80,6 +80,45 @@ produced was removed.
 **Why:** two buttons that do the same thing make the second one a decoy, and this was
 exactly the kind of overlap two parallel agents create.
 
+### 8. Titles are written by the model, once, after the answer
+
+The first message names the thread: the model is asked for a short Persian title, and the
+truncated first message is the fallback. The call happens **after** the model loop, not
+alongside it.
+
+**Why after:** the free provider serialises requests. A title call started with the answer
+queued behind a 24 s stream, hit its timeout, and every thread fell back to the question
+text — which is exactly what the sidebar showed before this change.
+
+**Why a separate port (`ConversationNamer`):** the orchestrator needs one method, tests
+inject a stub, and a deployment with no model still gets sensible titles.
+
+**Cost:** up to ~3 s added to the *first* turn only, after the text is already on screen.
+Measured 1–2.5 s against the configured model. `done` carries the title so the sidebar
+updates without a refetch — a refetch issued at that moment can still read the old row.
+
+### 9. The confirmation link follows the browser, not the project
+
+`signUp` sends `emailRedirectTo: window.location.origin`.
+
+**Why:** Supabase falls back to the project's **Site URL** when no redirect is supplied.
+Measured on this project: the link in the mail carried `redirect_to=http://localhost:3000`
+— not even the dev server's port, and meaningless on a phone. Deploying the app does not
+change that, because the value lives in the dashboard, not in the code.
+
+**What still has to be set once, in the dashboard:** Site URL = the deployed origin, and
+every origin that may be used (including `http://localhost:5173`) under
+Authentication → URL Configuration → Redirect URLs. Without that entry Supabase ignores
+`emailRedirectTo` and keeps using the Site URL.
+
+### 10. CORS lists every method the client uses
+
+`allow_methods` includes `PATCH` and `DELETE`. `/health` has a regression test for it.
+
+**Why:** rename and delete shipped as routes with passing API tests and were *uncallable
+from a browser* for a whole phase — the preflight failed and the client reported a network
+error with no server-side trace. Direct `TestClient` calls never exercise a preflight.
+
 ## Consequences
 
 - The interface looks like a modern assistant product: 260 px sidebar, centred 46 rem

@@ -3,8 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   createConversation,
+  deleteConversation as deleteConversationRequest,
   listConversations,
   listMessages,
+  renameConversation as renameConversationRequest,
   type ChatMessage,
   type Conversation,
   type ToolUsage,
@@ -72,6 +74,10 @@ export interface UseChatResult {
   stop: () => void;
   /** Ask the same question again, replacing the last answer instead of repeating it. */
   retry: () => Promise<void>;
+  /** Rename a thread. Resolves when the server has stored it. */
+  renameConversation: (conversationId: string, title: string) => Promise<void>;
+  /** Delete a thread and, if it was open, leave the empty state behind. */
+  deleteConversation: (conversationId: string) => Promise<void>;
   dismissError: () => void;
 }
 
@@ -403,7 +409,10 @@ export function useChat(token: string): UseChatResult {
 
         // `answer` is written by the stream callback, which TypeScript cannot
         // track; the explicit annotation keeps the null check meaningful.
-        const outcome: { answer: string | null } = { answer: null };
+        const outcome: { answer: string | null; title: string | null } = {
+          answer: null,
+          title: null,
+        };
 
         await streamMessage(
           token,
@@ -419,8 +428,9 @@ export function useChat(token: string): UseChatResult {
               toolBufferRef.current = [...toolBufferRef.current, tool];
               setToolsUsed(toolBufferRef.current);
             },
-            onDone: (finalAnswer) => {
+            onDone: (finalAnswer, _conversationId, title) => {
               outcome.answer = finalAnswer;
+              outcome.title = title;
             },
           },
           controller.signal,
@@ -440,11 +450,22 @@ export function useChat(token: string): UseChatResult {
           settle(partial, true);
         }
 
+        // The turn may have named the thread. Applied locally and immediately: the server
+        // sends it on `done`, so no refetch is needed and none can race the write.
+        const titledByServer: string | null = outcome.title;
+        if (titledByServer !== null && targetId !== null) {
+          setConversations((prev) =>
+            prev.map((item) =>
+              item.id === targetId ? { ...item, title: titledByServer } : item,
+            ),
+          );
+        }
+
         // The backend derives a conversation title from its first exchange, so a
         // still-unnamed conversation is re-read once. A stale title is cosmetic:
         // it must never surface as an error to the user.
         const knownTitle = conversationsRef.current.find((item) => item.id === conversationId)?.title;
-        if (!knownTitle) {
+        if (titledByServer === null && !knownTitle) {
           void refreshConversations().catch(() => undefined);
         }
       } catch (caught) {
@@ -510,6 +531,73 @@ export function useChat(token: string): UseChatResult {
     await runTurn(lastUser.content, "retry");
   }, [runTurn]);
 
+  // Renaming is optimistic with a per-row rollback: the sidebar must not jump, and a
+  // failed rename must not leave a title the server does not have. Reverting only the
+  // edited row matters — restoring a snapshot of the whole list can drop a thread that
+  // appeared since it was taken.
+  const renameConversation = useCallback(
+    async (conversationId: string, title: string): Promise<void> => {
+      const trimmed = title.trim();
+      if (trimmed.length === 0) return;
+
+      const previousTitle =
+        conversationsRef.current.find((item) => item.id === conversationId)?.title ?? null;
+
+      setConversations((prev) =>
+        prev.map((item) => (item.id === conversationId ? { ...item, title: trimmed } : item)),
+      );
+      try {
+        const updated = await renameConversationRequest(token, conversationId, trimmed);
+        setConversations((prev) =>
+          prev.map((item) => (item.id === conversationId ? updated : item)),
+        );
+      } catch (caught) {
+        setConversations((prev) =>
+          prev.map((item) =>
+            item.id === conversationId ? { ...item, title: previousTitle } : item,
+          ),
+        );
+        setError(describeError(caught, "تغییر نام گفتگو انجام نشد."));
+      }
+    },
+    [token],
+  );
+
+  const deleteConversation = useCallback(
+    async (conversationId: string): Promise<void> => {
+      const removedIndex = conversationsRef.current.findIndex(
+        (item) => item.id === conversationId,
+      );
+      const removed =
+        removedIndex >= 0 ? conversationsRef.current[removedIndex] : undefined;
+
+      setConversations((prev) => prev.filter((item) => item.id !== conversationId));
+      try {
+        await deleteConversationRequest(token, conversationId);
+        if (activeIdRef.current === conversationId) {
+          // Nothing to select: the next message starts a fresh thread, which is what
+          // the empty state already offers.
+          activeIdRef.current = null;
+          setActiveConversationId(null);
+          setMessages([]);
+          setToolsUsed([]);
+        }
+      } catch (caught) {
+        // Put the row back where it was, not at the top: the order is the user's sense of
+        // recency, and a failed delete should be invisible.
+        if (removed !== undefined) {
+          setConversations((prev) => {
+            const next = [...prev];
+            next.splice(Math.min(removedIndex, next.length), 0, removed);
+            return next;
+          });
+        }
+        setError(describeError(caught, "حذف گفتگو انجام نشد."));
+      }
+    },
+    [token],
+  );
+
   return {
     conversations,
     activeConversationId,
@@ -527,6 +615,8 @@ export function useChat(token: string): UseChatResult {
     send,
     stop,
     retry,
+    renameConversation,
+    deleteConversation,
     dismissError,
   };
 }

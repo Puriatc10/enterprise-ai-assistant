@@ -24,6 +24,17 @@ from app.domain.models.conversation import (
 )
 
 
+def _looks_like_title_request(request: LLMRequest) -> bool:
+    """Structural test, not a prompt match: no tools, one question, a small budget."""
+    return (
+        not request.tools
+        and request.max_tokens is not None
+        and request.max_tokens <= 256
+        and len(request.messages) == 2
+        and request.messages[1].role == "user"
+    )
+
+
 class FakeLLMAdapter:
     """Scripted ``LLMPort`` implementation.
 
@@ -46,6 +57,18 @@ class FakeLLMAdapter:
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         self.requests.append(request)
+
+        # A short, tool-free, single-question request is a title suggestion, not a chat
+        # turn. Answering it with an empty string keeps the script untouched for the turn
+        # itself and lets the orchestrator fall back to its derived title, which is what
+        # the existing tests assert. Title generation is covered separately, with a
+        # namer that returns a real string.
+        if _looks_like_title_request(request):
+            return LLMResponse(
+                message=ChatMessage(role="assistant", content=""),
+                model="fake",
+                usage=None,
+            )
 
         if not self._responses:
             raise LLMError("FakeLLMAdapter has no scripted response.")

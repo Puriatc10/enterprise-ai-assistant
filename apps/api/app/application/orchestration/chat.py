@@ -21,6 +21,7 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+from app.application.orchestration.naming import ConversationNamer
 from app.application.tools.executor import ExecutionRecord, ToolExecutor, tool_message
 from app.application.tools.registry import ToolRegistry
 from app.domain.interfaces.llm import LLMPort
@@ -28,6 +29,7 @@ from app.domain.interfaces.repository import ConversationRepository
 from app.domain.models.auth import AuthContext
 from app.domain.models.conversation import (
     ChatMessage,
+    Conversation,
     LLMRequest,
     StreamEvent,
     StreamEventKind,
@@ -76,6 +78,9 @@ class TurnResult:
     #: without them — which is also a fact worth showing, so it is not conflated with
     #: "we do not know".
     tools_used: tuple[ToolUsage, ...] = ()
+    #: Set when this turn named the conversation, so a non-streaming caller can update its
+    #: list without a second request.
+    title: str | None = None
 
 
 def _title_from(text: str, limit: int = DEFAULT_TITLE_LENGTH) -> str:
@@ -96,6 +101,7 @@ class ChatService:
         llm: LLMPort,
         tools: ToolRegistry | None = None,
         executor: ToolExecutor | None = None,
+        namer: ConversationNamer | None = None,
         history_limit: int = DEFAULT_HISTORY_LIMIT,
         max_tool_rounds: int = DEFAULT_MAX_TOOL_ROUNDS,
     ) -> None:
@@ -103,6 +109,8 @@ class ChatService:
         self._llm = llm
         self._tools = tools
         self._executor = executor
+        #: ``None`` keeps the pre-existing behaviour (title from the first message).
+        self._namer = namer
         self._history_limit = history_limit
         self._max_tool_rounds = max_tool_rounds
 
@@ -130,7 +138,10 @@ class ChatService:
             raise ValueError("Message must not be empty.")
 
         if conversation_id is None:
-            conversation = await self._repository.create(context=context, title=_title_from(text))
+            # No title at creation: naming runs concurrently with the answer below, and a
+            # failed turn leaves the thread untitled rather than badly titled — the next
+            # turn names it, because the check is "has no title yet".
+            conversation = await self._repository.create(context=context, title=None)
         else:
             conversation = await self._repository.get(
                 context=context, conversation_id=conversation_id
@@ -145,8 +156,12 @@ class ChatService:
 
         # Name the thread from its first message. A title the user set is never
         # overwritten, and a naming failure is cosmetic: it must not cost the answer.
-        if conversation.title is None:
-            await self._name_conversation(context, conversation.id, message)
+        #
+        # Deliberately *after* the model loop, not alongside it: the free provider
+        # serialises requests, so a title call started with the answer queued behind the
+        # stream and timed out, and every thread got the fallback. Measured: 1–3 s once the
+        # answer is done, 0 successful titles while one was in flight.
+        title = await self._name_if_untitled(context, conversation, text)
 
         history = await self._repository.list_messages(
             context=context,
@@ -221,12 +236,16 @@ class ChatService:
             message=ChatMessage(role="assistant", content=answer),
         )
 
+        # The client refetches its conversation list as soon as this returns, so the
+        # title must be stored by then.
+
         return TurnResult(
             conversation_id=conversation.id,
             answer=answer,
             model=model_name,
             usage=usage,
             tools_used=tuple(tool_usage),
+            title=title,
         )
 
     async def stream_message(
@@ -251,7 +270,7 @@ class ChatService:
             raise ValueError("Message must not be empty.")
 
         if conversation_id is None:
-            conversation = await self._repository.create(context=context, title=_title_from(text))
+            conversation = await self._repository.create(context=context, title=None)
         else:
             conversation = await self._repository.get(
                 context=context, conversation_id=conversation_id
@@ -263,9 +282,6 @@ class ChatService:
             conversation_id=conversation.id,
             message=ChatMessage(role="user", content=text),
         )
-        if conversation.title is None:
-            await self._name_conversation(context, conversation.id, text)
-
         history = await self._repository.list_messages(
             context=context,
             conversation_id=conversation.id,
@@ -334,32 +350,66 @@ class ChatService:
             message=ChatMessage(role="assistant", content=answer),
         )
 
+        # Before ``done``: the client applies this to its own list, and a title written
+        # afterwards would appear only on the next page load.
+        title = await self._name_if_untitled(context, conversation, text)
+
         yield StreamEvent(
             kind=StreamEventKind.DONE,
             answer=answer,
             conversation_id=conversation.id,
+            title=title,
         )
+
+    async def _name_if_untitled(
+        self,
+        context: AuthContext,
+        conversation: Conversation,
+        text: str,
+    ) -> str | None:
+        """Name a thread exactly once, and return the title that was stored.
+
+        ``None`` means "this thread already had a title" — the caller treats that as
+        nothing changed, not as a missing title.
+        """
+        if conversation.title is not None:
+            return None
+        return await self._name_conversation(context, conversation.id, text)
 
     async def _name_conversation(
         self,
         context: AuthContext,
         conversation_id: str,
         text: str,
-    ) -> None:
-        """Derive a title from the first message, once.
+    ) -> str | None:
+        """Give the conversation a title, once: the model's suggestion, else the message.
 
         The sidebar is the only place a title is visible, so failing to set one is a
-        cosmetic loss — logged, never raised.
+        cosmetic loss — logged, never raised. The fallback is deliberately the truncated
+        first message: with no namer, or a model that is rate-limited, the thread still
+        gets a name that means something.
+
+        Returns the stored title so the caller can hand it to the client without a second
+        round-trip — a refetch right after the write can still read the old row.
         """
-        title = _title_from(text)
+        suggested: str | None = None
+        if self._namer is not None:
+            try:
+                suggested = await self._namer.suggest(text)
+            except Exception:  # noqa: BLE001 - see docstring
+                logger.warning("title suggestion raised", exc_info=True)
+
+        title = suggested or _title_from(text)
         if not title:
-            return
+            return None
         try:
             await self._repository.set_title_if_absent(
                 context=context, conversation_id=conversation_id, title=title
             )
         except Exception:  # noqa: BLE001 - see docstring
             logger.warning("could not name conversation %s", conversation_id, exc_info=True)
+            return None
+        return title
 
     async def _record_audit(
         self,

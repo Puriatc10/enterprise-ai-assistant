@@ -460,3 +460,71 @@
   .thread__dots span { animation: none; opacity: 0.7; }
   .sidebar__skeleton { animation: none; }
 }
+
+/* Sidebar row actions: rename and delete live behind a per-row menu. */
+.conv-row { position: relative; display: flex; align-items: center; gap: 2px; }
+.conv-row .conv { flex: 1 1 auto; min-width: 0; }
+
+.conv__more {
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  /* Hidden until the row is hovered or the control is focused, so the list stays quiet —
+     but always reachable by keyboard, and always visible on touch. */
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease;
+}
+.conv-row:hover .conv__more,
+.conv-row:focus-within .conv__more,
+.conv__more[aria-expanded="true"] { opacity: 1; }
+.conv__more:hover { background: var(--surface-muted); color: var(--text); }
+.conv__more:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (hover: none) { .conv__more { opacity: 1; } }
+
+.conv__menu {
+  position: absolute;
+  inset-inline-end: 0.35rem;
+  top: calc(100% - 0.15rem);
+  z-index: 5;
+  min-width: 9.5rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+.conv__menu-item {
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.conv__menu-item:hover { background: var(--surface-muted); }
+.conv__menu-item--danger { color: var(--warn); }
+
+.conv-form { flex: 1 1 auto; min-width: 0; }
+.conv__input {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}

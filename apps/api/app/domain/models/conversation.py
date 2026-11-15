@@ -95,6 +95,10 @@ class StreamEvent(BaseModel):
     tool: ToolUsage | None = None
     answer: str | None = None
     conversation_id: str | None = None
+    #: Set on ``done`` when this turn named the conversation. The client applies it to its
+    #: own list instead of refetching — a refetch races the write and can return the old,
+    #: untitled row.
+    title: str | None = None
     message: str | None = None
     code: str | None = None
 

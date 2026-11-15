@@ -145,6 +145,21 @@ export function describeAuthError(error: unknown): string {
   return MESSAGES.generic;
 }
 
+/**
+ * Remove a consumed auth fragment from the address bar.
+ *
+ * After the confirmation mail's link, Supabase puts the session in `#access_token=…`.
+ * Leaving it there keeps a bearer token in history, so it is dropped once supabase-js has
+ * stored the session.
+ */
+function clearAuthFragment(): void {
+  const { hash } = window.location;
+  if (!hash.includes("access_token") && !hash.includes("error_description")) {
+    return;
+  }
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
 function toSessionState(session: Session | null): SessionState {
   if (!session || !session.access_token) {
     return { status: "signedOut" };
@@ -191,6 +206,10 @@ export function useSession(): UseSessionResult {
       if (!active) {
         return;
       }
+      // The confirmation link lands here with the session in the URL fragment. supabase-js
+      // has consumed it by now, so drop it: a bearer token left in the address bar also
+      // ends up in browser history and in any screenshot the user takes.
+      clearAuthFragment();
       if (error) {
         setSession({ status: "signedOut" });
         return;
@@ -234,6 +253,16 @@ export function useSession(): UseSessionResult {
     const { data, error } = await client.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        // Without this Supabase falls back to the project's *Site URL*, so the link in the
+        // confirmation mail points at whatever host was configured there — useless from a
+        // phone if that host is localhost. The current origin is right in every
+        // environment: localhost:5173 today, the Render site after deploy.
+        //
+        // It must also be listed in the project under
+        // Authentication → URL Configuration → Redirect URLs, or Supabase ignores it.
+        emailRedirectTo: window.location.origin,
+      },
     });
 
     if (error) {

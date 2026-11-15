@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 
 import type { Conversation } from "../services/api";
@@ -7,6 +7,10 @@ interface SidebarProps {
   conversations: Conversation[];
   activeId: string | null;
   onSelect: (id: string) => void;
+  /** Rename a thread; the sidebar closes its editor as soon as this settles. */
+  onRename: (id: string, title: string) => Promise<void>;
+  /** Delete a thread. The caller owns the confirmation copy. */
+  onDelete: (id: string) => Promise<void>;
   onCreate: () => void;
   isCreating: boolean;
   loading: boolean;
@@ -62,8 +66,76 @@ function SignOutIcon(): JSX.Element {
 }
 
 export function Sidebar(props: SidebarProps): JSX.Element {
-  const { conversations, activeId, onSelect, onCreate, isCreating, loading, email, onSignOut, open, onClose } =
-    props;
+  const {
+    conversations,
+    activeId,
+    onSelect,
+    onRename,
+    onDelete,
+    onCreate,
+    isCreating,
+    loading,
+    email,
+    onSignOut,
+    open,
+    onClose,
+  } = props;
+
+  // Row-level UI state. Kept here rather than in the hook: which menu is open is not
+  // part of the conversation model, and it must die with the sidebar.
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const committingRef = useRef<string | null>(null);
+
+  const commitRename = async (id: string): Promise<void> => {
+    // Enter also blurs the input, so without this guard one edit calls the API twice.
+    if (committingRef.current === id) return;
+    committingRef.current = id;
+    const next = draft.trim();
+    setRenamingId(null);
+    if (next.length === 0) {
+      committingRef.current = null;
+      return;
+    }
+    setBusyId(id);
+    try {
+      await onRename(id, next);
+    } catch {
+      // The hook reports failures in the banner and rolls its own state back; the row
+      // keeps its previous title, which is the truth.
+    } finally {
+      setBusyId(null);
+      committingRef.current = null;
+    }
+  };
+
+  const commitDelete = async (id: string): Promise<void> => {
+    setBusyId(id);
+    try {
+      await onDelete(id);
+    } catch {
+      // Same contract as rename.
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // A menu that survives a click elsewhere looks like a stuck UI; close it on any
+  // pointer press outside a row.
+  useEffect(() => {
+    if (menuId === null) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".conv-row")) return;
+      setMenuId(null);
+      setConfirmingId(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [menuId]);
   const closeRef = useRef<HTMLButtonElement | null>(null);
 
   // Escape closes the drawer from anywhere: a keyboard user inside the list
@@ -146,11 +218,50 @@ export function Sidebar(props: SidebarProps): JSX.Element {
             <ul className="sidebar__list">
               {conversations.map((conversation) => {
                 const isActive = conversation.id === activeId;
-                const title = conversation.title?.trim() ? conversation.title.trim() : "گفتگوی بدون عنوان";
+                const stored = conversation.title?.trim() ? conversation.title.trim() : "";
+                const title = stored || "گفتگوی بدون عنوان";
                 const stamp = formatStamp(conversation.updated_at);
+                const isRenaming = renamingId === conversation.id;
+                const menuOpen = menuId === conversation.id;
+
+                if (isRenaming) {
+                  return (
+                    <li key={conversation.id} className="conv-row">
+                      <form
+                        className="conv-form"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void commitRename(conversation.id);
+                        }}
+                      >
+                        <input
+                          className="conv__input"
+                          dir="auto"
+                          autoFocus
+                          maxLength={200}
+                          value={draft}
+                          aria-label="عنوان جدید گفتگو"
+                          onChange={(event) => setDraft(event.target.value)}
+                          onBlur={() => {
+                            // Blur commits, like every other inline editor the user
+                            // meets: losing the edit because they clicked away is worse
+                            // than saving a title they can rename again.
+                            void commitRename(conversation.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              setRenamingId(null);
+                            }
+                          }}
+                        />
+                      </form>
+                    </li>
+                  );
+                }
 
                 return (
-                  <li key={conversation.id}>
+                  <li key={conversation.id} className="conv-row">
                     <button
                       type="button"
                       className={isActive ? "conv conv--active" : "conv"}
@@ -172,6 +283,72 @@ export function Sidebar(props: SidebarProps): JSX.Element {
                         </span>
                       ) : null}
                     </button>
+
+                    <button
+                      type="button"
+                      className="conv__more"
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpen}
+                      aria-label={`گزینه‌های «${title}»`}
+                      disabled={busyId === conversation.id}
+                      onClick={() => {
+                        setConfirmingId(null);
+                        setMenuId(menuOpen ? null : conversation.id);
+                      }}
+                    >
+                      ⋯
+                    </button>
+
+                    {menuOpen ? (
+                      <div className="conv__menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="conv__menu-item"
+                          onClick={() => {
+                            setMenuId(null);
+                            setConfirmingId(null);
+                            setDraft(stored);
+                            setRenamingId(conversation.id);
+                          }}
+                        >
+                          تغییر نام
+                        </button>
+                        {confirmingId === conversation.id ? (
+                          <>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="conv__menu-item conv__menu-item--danger"
+                              onClick={() => {
+                                setMenuId(null);
+                                setConfirmingId(null);
+                                void commitDelete(conversation.id);
+                              }}
+                            >
+                              حذف قطعی
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="conv__menu-item"
+                              onClick={() => setConfirmingId(null)}
+                            >
+                              انصراف
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="conv__menu-item conv__menu-item--danger"
+                            onClick={() => setConfirmingId(conversation.id)}
+                          >
+                            حذف
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}

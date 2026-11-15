@@ -5,11 +5,11 @@ import {
   createConversation,
   listConversations,
   listMessages,
-  sendMessage,
   type ChatMessage,
   type Conversation,
   type ToolUsage,
 } from "../../services/api";
+import { streamMessage } from "../../services/stream";
 
 /**
  * A failure the user must be able to act on.
@@ -26,13 +26,39 @@ export interface ChatError {
   sessionExpired: boolean;
 }
 
+/**
+ * A message plus the one piece of state the backend history does not carry.
+ *
+ * The server stores a complete answer or nothing; it has no notion of "the user
+ * stopped reading". `interrupted` is therefore local-only and describes how the
+ * text got here: `true` means the bubble holds whatever had arrived when the
+ * stream stopped or broke, not a finished answer. It lives on the message rather
+ * than in a side map so it survives re-renders and reordering and disappears
+ * with the bubble.
+ *
+ * The field is optional, so `LocalMessage[]` still satisfies every consumer that
+ * only knows about `ChatMessage` — including the components that render it.
+ */
+export interface LocalMessage extends ChatMessage {
+  interrupted?: boolean;
+}
+
 export interface UseChatResult {
   conversations: Conversation[];
   activeConversationId: string | null;
-  messages: ChatMessage[];
+  messages: LocalMessage[];
   /** Id of the optimistic reply bubble currently waiting on the backend. */
   pendingReplyId: string | null;
-  /** `tools_used` from the most recent answer. Never merged across answers. */
+  /**
+   * Text received for the in-flight answer, or `null` when nothing is in flight.
+   *
+   * This is the live buffer, and the *only* place in-flight text lives: the
+   * reserved bubble in `messages` stays empty until the turn settles, so a
+   * renderer must never concatenate the two. `messages` holds settled content
+   * only — the server's answer on success, the partial text on stop or failure.
+   */
+  streamingText: string | null;
+  /** Tools used by the most recent answer. Never merged across answers. */
   toolsUsed: ToolUsage[];
   isSending: boolean;
   isCreatingConversation: boolean;
@@ -42,6 +68,10 @@ export interface UseChatResult {
   selectConversation: (conversationId: string) => void;
   startConversation: () => Promise<Conversation | null>;
   send: (content: string) => Promise<void>;
+  /** Abort the in-flight answer, keeping the text that already arrived. */
+  stop: () => void;
+  /** Ask the same question again, replacing the last answer instead of repeating it. */
+  retry: () => Promise<void>;
   dismissError: () => void;
 }
 
@@ -87,8 +117,9 @@ function pickMostRecent(conversations: Conversation[]): Conversation | null {
 export function useChat(token: string): UseChatResult {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [pendingReplyId, setPendingReplyId] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
   const [toolsUsed, setToolsUsed] = useState<ToolUsage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
@@ -103,11 +134,36 @@ export function useChat(token: string): UseChatResult {
   const creatingRef = useRef(false);
   const activeIdRef = useRef<string | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
+  const messagesRef = useRef<LocalMessage[]>([]);
   const localSeq = useRef(0);
+
+  // The in-flight request, so `stop()` and a conversation switch can abort it.
+  const runRef = useRef<AbortController | null>(null);
+  // Whether the current turn ended because the user pressed stop. A ref because
+  // the abort resolves the awaited call in another microtask, long after the
+  // click handler returned.
+  const stoppedRef = useRef(false);
+  // Token text and tools accumulate in refs as well as state: events fire many
+  // times per frame, and the settle path needs the final value synchronously.
+  const streamTextRef = useRef("");
+  const toolBufferRef = useRef<ToolUsage[]>([]);
 
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // A stream that outlives the component would keep writing into dropped state
+  // and hold the socket open; abort it on unmount.
+  useEffect(
+    () => () => {
+      runRef.current?.abort();
+    },
+    [],
+  );
 
   const dismissError = useCallback(() => {
     setError(null);
@@ -142,10 +198,17 @@ export function useChat(token: string): UseChatResult {
   const selectConversation = useCallback(
     (conversationId: string): void => {
       if (activeIdRef.current === conversationId) return;
+      // Leaving a thread mid-answer: drop the request rather than let it keep the
+      // composer locked, and do not paste its answer into the thread now shown.
+      if (runRef.current !== null) {
+        stoppedRef.current = true;
+        runRef.current.abort();
+      }
       activeIdRef.current = conversationId;
       setActiveConversationId(conversationId);
       setMessages([]);
       setPendingReplyId(null);
+      setStreamingText(null);
       setToolsUsed([]);
       setError(null);
       void loadMessages(conversationId);
@@ -187,11 +250,16 @@ export function useChat(token: string): UseChatResult {
 
     try {
       const created = await createConversation(token);
+      if (runRef.current !== null) {
+        stoppedRef.current = true;
+        runRef.current.abort();
+      }
       setConversations((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
       activeIdRef.current = created.id;
       setActiveConversationId(created.id);
       setMessages([]);
       setPendingReplyId(null);
+      setStreamingText(null);
       setToolsUsed([]);
       return created;
     } catch (caught) {
@@ -203,23 +271,86 @@ export function useChat(token: string): UseChatResult {
     }
   }, [token]);
 
-  const send = useCallback(
-    async (raw: string): Promise<void> => {
+  /**
+   * One turn: reserve a slot, stream into it, settle it.
+   *
+   * `mode: "retry"` re-asks the question already on screen, so the user bubble is
+   * not repeated and the previous answer is replaced rather than appended —
+   * otherwise a retry would read as two questions in a row.
+   */
+  const runTurn = useCallback(
+    async (raw: string, mode: "send" | "retry"): Promise<void> => {
       const content = raw.trim();
-      if (!content || sendingRef.current) return;
+      if (content.length === 0 || sendingRef.current) return;
 
       sendingRef.current = true;
+      stoppedRef.current = false;
+      streamTextRef.current = "";
+      toolBufferRef.current = [];
       setIsSending(true);
       setError(null);
+      setStreamingText(null);
+      setToolsUsed([]);
 
       let targetId: string | null = null;
       let placeholderId: string | null = null;
+      let assistantId: string | null = null;
+
+      /**
+       * Move the reserved slot to a settled message.
+       *
+       * Text reaches `messages` only here, never from the token handler: tokens
+       * feed `streamingText` alone. One source of truth per phase, and the
+       * "server answer wins" rule becomes the single branch below.
+       */
+      const settle = (text: string, interrupted: boolean): void => {
+        if (targetId === null || activeIdRef.current !== targetId) return;
+
+        if (text.length === 0) {
+          // Nothing arrived and nothing is owed: withdraw the empty slot but
+          // leave the question exactly where it is.
+          if (placeholderId !== null) {
+            const doomed = placeholderId;
+            setMessages((prev) => prev.filter((item) => item.id !== doomed));
+          }
+          return;
+        }
+
+        const settled: LocalMessage = interrupted
+          ? {
+              id: assistantId ?? `local-assistant-${localSeq.current}`,
+              role: "assistant",
+              content: text,
+              created_at: new Date().toISOString(),
+              interrupted: true,
+            }
+          : {
+              id: assistantId ?? `local-assistant-${localSeq.current}`,
+              role: "assistant",
+              content: text,
+              created_at: new Date().toISOString(),
+            };
+
+        const pending = placeholderId;
+        setMessages((prev) => {
+          if (pending !== null && prev.some((item) => item.id === pending)) {
+            return prev.map((item) => (item.id === pending ? settled : item));
+          }
+          // The thread was reloaded mid-flight (switched away and back): show the
+          // answer rather than swallow a reply the user waited for — unless the
+          // reloaded history already contains it.
+          if (prev.some((item) => item.role === "assistant" && item.content === text)) {
+            return prev;
+          }
+          return [...prev, settled];
+        });
+      };
 
       try {
-        targetId = activeIdRef.current ?? null;
-        if (!targetId) {
-          // First message in a fresh session: the backend owns conversation
-          // ids, so one is created lazily rather than faked on the client.
+        targetId = activeIdRef.current;
+        if (targetId === null) {
+          // First message in a fresh session: the backend owns conversation ids,
+          // so one is created lazily rather than faked on the client.
           const created = await createConversation(token);
           targetId = created.id;
           activeIdRef.current = created.id;
@@ -228,21 +359,22 @@ export function useChat(token: string): UseChatResult {
           setMessages([]);
         }
 
-        const conversationId = targetId;
+        const conversationId: string = targetId;
         // Allocate the id before the request settles: a failed send keeps its
         // user message on screen, so reusing this number would mint duplicate
         // React keys on the retry.
         const seq = localSeq.current++;
+        const pendingId = `local-pending-${seq}`;
+        placeholderId = pendingId;
+        assistantId = `local-assistant-${seq}`;
 
-        const userMessage: ChatMessage = {
+        const userMessage: LocalMessage = {
           id: `local-user-${seq}`,
           role: "user",
           content,
           created_at: new Date().toISOString(),
         };
-        const pendingId = `local-pending-${seq}`;
-        placeholderId = pendingId;
-        const placeholder: ChatMessage = {
+        const placeholder: LocalMessage = {
           id: pendingId,
           role: "assistant",
           content: "",
@@ -251,37 +383,61 @@ export function useChat(token: string): UseChatResult {
 
         // Optimistic: the question appears before the round-trip, and the empty
         // placeholder reserves the answer's slot in the thread. When the answer
-        // arrives it is swapped into that slot instead of appended — otherwise a
+        // settles it is swapped into that slot instead of appended — otherwise a
         // reply that took ten seconds would land below messages sent after it.
-        setMessages((prev) => [...prev, userMessage, placeholder]);
+        setMessages((prev) => {
+          let base: LocalMessage[] = [...prev];
+          if (mode === "retry") {
+            while (base.length > 0 && base[base.length - 1]?.role === "assistant") {
+              base = base.slice(0, -1);
+            }
+          } else {
+            base = [...base, userMessage];
+          }
+          return [...base, placeholder];
+        });
         setPendingReplyId(pendingId);
-        setToolsUsed([]);
 
-        const result = await sendMessage(token, conversationId, content);
+        const controller = new AbortController();
+        runRef.current = controller;
 
-        // A reply for a thread the user has since left must not be pasted into
-        // the visible one; they will get it from the server when they go back.
-        if (activeIdRef.current === conversationId) {
-          const answer: ChatMessage = {
-            id: `local-assistant-${seq}`,
-            role: "assistant",
-            content: result.answer,
-            created_at: new Date().toISOString(),
-          };
-          setMessages((prev) => {
-            // Normally the placeholder is still there and gets swapped. If the
-            // thread was reloaded mid-flight (user switched away and back) the
-            // answer has nowhere to land: show it rather than swallow a reply the
-            // user waited for — unless the reloaded history already has it.
-            if (prev.some((item) => item.id === pendingId)) {
-              return prev.map((item) => (item.id === pendingId ? answer : item));
-            }
-            if (prev.some((item) => item.role === "assistant" && item.content === result.answer)) {
-              return prev;
-            }
-            return [...prev, answer];
-          });
-          setToolsUsed(result.tools_used);
+        // `answer` is written by the stream callback, which TypeScript cannot
+        // track; the explicit annotation keeps the null check meaningful.
+        const outcome: { answer: string | null } = { answer: null };
+
+        await streamMessage(
+          token,
+          conversationId,
+          content,
+          {
+            onToken: (text) => {
+              if (text.length === 0) return;
+              streamTextRef.current += text;
+              setStreamingText(streamTextRef.current);
+            },
+            onTool: (tool) => {
+              toolBufferRef.current = [...toolBufferRef.current, tool];
+              setToolsUsed(toolBufferRef.current);
+            },
+            onDone: (finalAnswer) => {
+              outcome.answer = finalAnswer;
+            },
+          },
+          controller.signal,
+        );
+
+        const settledAnswer: string | null = outcome.answer;
+        const partial = streamTextRef.current;
+
+        if (stoppedRef.current) {
+          // A stop is not a failure: keep exactly what arrived and label it.
+          settle(partial, true);
+        } else if (settledAnswer !== null) {
+          // The server is the record. Its final answer replaces the concatenated
+          // tokens, which can legitimately differ (tool-round text, trimming).
+          settle(settledAnswer, false);
+        } else {
+          settle(partial, true);
         }
 
         // The backend derives a conversation title from its first exchange, so a
@@ -292,15 +448,29 @@ export function useChat(token: string): UseChatResult {
           void refreshConversations().catch(() => undefined);
         }
       } catch (caught) {
-        // Keep the user's own message on screen: it was accepted by the UI, and
-        // removing it would make the failure look like a typo. Only the
-        // unfulfilled reply is withdrawn.
-        if (targetId !== null && activeIdRef.current === targetId && placeholderId !== null) {
-          const doomedId = placeholderId;
-          setMessages((prev) => prev.filter((item) => item.id !== doomedId));
+        // Keep what arrived: a broken stream is not a reason to throw away an
+        // answer the user has already started reading.
+        const partial = streamTextRef.current;
+        if (partial.length > 0) {
+          settle(partial, true);
+        } else if (
+          targetId !== null &&
+          activeIdRef.current === targetId &&
+          placeholderId !== null
+        ) {
+          // Keep the user's own message on screen: it was accepted by the UI, and
+          // removing it would make the failure look like a typo. Only the
+          // unfulfilled reply is withdrawn.
+          const doomed = placeholderId;
+          setMessages((prev) => prev.filter((item) => item.id !== doomed));
         }
         setError(describeError(caught, "پاسخ به سؤال شما دریافت نشد."));
       } finally {
+        runRef.current = null;
+        stoppedRef.current = false;
+        streamTextRef.current = "";
+        toolBufferRef.current = [];
+        setStreamingText(null);
         setPendingReplyId(null);
         sendingRef.current = false;
         setIsSending(false);
@@ -309,11 +479,43 @@ export function useChat(token: string): UseChatResult {
     [token, refreshConversations],
   );
 
+  const send = useCallback(
+    async (raw: string): Promise<void> => {
+      await runTurn(raw, "send");
+    },
+    [runTurn],
+  );
+
+  const stop = useCallback((): void => {
+    const controller = runRef.current;
+    if (controller === null) return;
+    // Flag first: the abort resolves `await streamMessage` in a later microtask,
+    // and that is where the partial text is committed as an interrupted answer.
+    stoppedRef.current = true;
+    controller.abort();
+  }, []);
+
+  const retry = useCallback(async (): Promise<void> => {
+    if (sendingRef.current) return;
+    // Reverse scan rather than `findLast`: the lib target here predates it.
+    let lastUser: LocalMessage | undefined;
+    for (let index = messagesRef.current.length - 1; index >= 0; index -= 1) {
+      const candidate = messagesRef.current[index];
+      if (candidate?.role === "user") {
+        lastUser = candidate;
+        break;
+      }
+    }
+    if (lastUser === undefined) return;
+    await runTurn(lastUser.content, "retry");
+  }, [runTurn]);
+
   return {
     conversations,
     activeConversationId,
     messages,
     pendingReplyId,
+    streamingText,
     toolsUsed,
     isSending,
     isCreatingConversation,
@@ -323,6 +525,8 @@ export function useChat(token: string): UseChatResult {
     selectConversation,
     startConversation,
     send,
+    stop,
+    retry,
     dismissError,
   };
 }

@@ -147,22 +147,6 @@ future on-premise sources and is exercised in CI rather than in the demo.
 
 ---
 
-## Phase 4 — Data Connectors
-
-- **Mock connector** promoted from a test double to a coherent demonstration source.
-- **PostgreSQL connector**: read-only role, named repository functions, row limits.
-- **Didar24 connector**: **blocked by design** — no authorized API exists (ADR-0002). The
-  mock is the documented demonstration path; a real adapter requires a DayPI agreement
-  first, so no code is written against an unpublished contract.
-- **External REST connector**: reusable adapter with fixed endpoint allowlist.
-- Standardized `ConnectorResult` and normalization tests per connector.
-
-Exit criteria: at least two independent sources answer through the same orchestrator
-without orchestration changes.
-
----
-
-
 ## Phase 5 — Frontend and End-to-End Integration ✅
 
 - ✅ Chat UI: conversation sidebar, message thread, composer, loading/error/empty states,
@@ -227,7 +211,33 @@ throwaway `postgres:16` container, because no administrative connection exists h
 
 ---
 
-## Phases 8–9 — planned
+## Phase 8 — Interface and streaming ✅
+
+- ✅ Token layer in light and dark, self-hosted **Vazirmatn**, tabular numerals, LTR
+  isolation for ids and code (ADR-0009).
+- ✅ Rebuilt shell: 260 px sidebar with a drawer under 900 px, centred 46 rem thread,
+  rounded composer, message bubbles with hover actions, tool provenance chips.
+- ✅ **SSE streaming** end to end: `token` / `tool` / `done` / `error` events, a stop that
+  keeps partial text, retries only before the first delta, server answer authoritative.
+- ✅ Sanitised markdown (`rehype-sanitize`, no raw HTML), copy and retry actions, an
+  interrupted-answer label.
+- ✅ Checked by rendering the real component tree at 1280 px and at 900/420 px in both
+  themes: no horizontal overflow, composer and empty state aligned, 21 client tests green.
+
+---
+
+## Phase 9 — Hardening ✅ (deployment pending)
+
+- ✅ Per-user sliding-window rate limit, `429` + `Retry-After`, checked before any provider
+  work in both routes.
+- ✅ Rename, delete and **keyset pagination** on conversations; another user's thread is a
+  404 in both adapters (no existence oracle).
+- ✅ Bundle split: initial JS 649 kB → **448 kB (128.63 kB gzip)** with a lazy 202 kB chat
+  chunk.
+- ✅ `X-Response-Time` plus one structured access log line carrying the request id.
+- ⏳ **Not done:** applying `render.yaml` and the live Supabase RLS test. Both need the
+  owner's Render account and a confirmed user; everything before that is prepared and
+  documented in `docs/development/DEPLOYMENT.md`.
 
 ---
 

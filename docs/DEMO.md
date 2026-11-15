@@ -20,21 +20,23 @@ has been run in this repository; nothing is staged.
 | 1 | Open the static site. Point at the login screen. | "Authenticated product, Persian-first, RTL by default. No anonymous path." |
 | 2 | Sign in. | "Supabase issued the token; the backend verifies it against the project's JWKS. No shared secret exists anywhere." |
 | 3 | Ask **«چند بیمه‌نامه دارم؟»** | "This is a natural-language question about data the model has never seen." |
-| 4 | While it thinks | "The model is deciding *which* tool to call — the backend decides whether it may." |
-| 5 | Read the answer, then point at the line under it | "`get_my_policy_count · موفق · ۱۲ms`. That number came from a tool result, not from the model. If the tool had failed, the answer would say so." |
-| 6 | Ask **«بیمه‌نامه آتش‌سوزی من فعال است؟»** | "Different intent, same registry. It picks `get_policy_status`." |
-| 7 | Reload the page | "Conversations persist. The title is derived from your first message." |
+| 4 | While it answers | "Text streams as the model produces it — a free-tier model takes 5–30 s, so waiting silently was the worst part of the first version. Stop keeps whatever arrived." |
+| 5 | Read the answer, then point at the chips under it | "`get_my_policy_count · موفق · ۱۲ms`. That number came from a tool result, not from the model. If the tool had failed, the answer would say so." |
+| 6 | Ask **«چند تیکت باز دارم؟»** | "Different domain, different database engine — SQLite, opened read-only. Same orchestrator." |
+| 7 | Ask **«چند بیمه‌نامه دارم و چند تیکت باز دارم؟»** | "One question, two sources, two tool calls in the same turn. This is the multi-source claim, not a slide." |
+| 8 | Reload the page | "Conversations persist. Rename or delete them from the sidebar; the title is derived from your first message." |
 
 ## What is actually happening
 
 ```text
-question → ChatService → LLM proposes get_my_policy_count
+question → ChatService → LLM proposes a tool (routing accuracy measured at 92 %)
                        → executor: allowlist → scope → arguments → AuthContext identity
-                       → MockPolicyConnector (synthetic, per-subject)
-                       → result back to the model → Persian answer → tools_used in response
+                       → connector: mock policies | SQLite support | Postgres CRM
+                       → result back to the model → Persian answer streamed to the browser
+                       → tools_used persisted; one audit row per call
 ```
 
-The model never sees a database, a credential, or another customer's row. It sees four
+The model never sees a database, a credential, or another customer's row. It sees eight
 narrow read-only functions and returns a proposal.
 
 ## Questions that work well
@@ -42,7 +44,10 @@ narrow read-only functions and returns a proposal.
 - «چند بیمه‌نامه دارم؟» → count (3 total, 2 active)
 - «بیمه‌نامه‌هایم را نشان بده» → list with type, status, dates
 - «وضعیت بیمه‌نامه POL-XXXX-1 چیست؟» → status of one policy
-- «چند بیمه‌نامه فعال دارم؟» → same tool, filtered by the model's reading of the question
+- «چند تیکت باز دارم؟» → support count from the SQLite source
+- «تیکت‌های پشتیبانی من را لیست کن» → tickets with status and priority
+- «چه داده‌هایی می‌توانی ببینی؟» → the capability tool lists the enabled domains
+- «چند بیمه‌نامه دارم و چند تیکت باز دارم؟» → two sources, one answer
 
 Ask something the tools cannot answer — «قیمت دلار امروز چند است؟» — and the assistant
 should say it does not have that data. That is the demonstration, not a failure: it is the

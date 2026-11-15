@@ -1,6 +1,7 @@
 /* Auth screen + configuration notice.
-   Colours and radii come from :root in styles.css so both screens share one
-   palette; fallbacks keep this file readable if it is ever loaded alone. */
+   Colours, radii, shadows and durations come from src/styles/tokens.css so both
+   screens share one palette; the fallbacks keep this file readable if it is
+   ever loaded alone (and are inert once the tokens are present). */
 
 .auth {
   min-height: 100vh;
@@ -17,8 +18,9 @@
   max-width: 420px;
   background: var(--surface, #ffffff);
   border: 1px solid var(--border, #e3e6eb);
-  border-radius: var(--radius, 12px);
-  padding: 28px 24px;
+  border-radius: var(--radius-lg, 16px);
+  padding: 30px 26px;
+  box-shadow: var(--shadow-md, 0 4px 12px -2px rgb(16 24 40 / 7%));
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -69,11 +71,15 @@
   font: inherit;
   font-size: 1rem;
   padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border, #e3e6eb);
+  border-radius: var(--radius-sm, 8px);
+  /* --border-strong, not --border: on a white card a hairline fill alone reads
+     as a disabled field, and an empty input has to look editable. */
+  border: 1px solid var(--border-strong, #d4dae3);
   background: var(--bg, #f6f7f9);
   color: var(--text, #14181f);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color var(--duration-fast, 150ms) ease-out,
+    box-shadow var(--duration-fast, 150ms) ease-out;
 }
 
 .auth__input::placeholder {
@@ -101,16 +107,20 @@
   font-weight: 600;
   margin-top: 4px;
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 8px);
   border: 1px solid transparent;
   background: var(--accent, #1f5eff);
-  color: #ffffff;
+  /* Not #fff: the dark theme's accent is a light blue, so the label has to
+     flip with it or the button becomes unreadable. */
+  color: var(--on-accent, #ffffff);
   cursor: pointer;
-  transition: filter 0.15s ease, opacity 0.15s ease;
+  transition:
+    background var(--duration-fast, 150ms) ease-out,
+    opacity var(--duration-fast, 150ms) ease-out;
 }
 
 .auth__submit:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: var(--accent-hover, #1f4bbd);
 }
 
 .auth__submit:focus-visible {
@@ -183,7 +193,7 @@
   margin: 0;
   font-size: 0.78rem;
   line-height: 1.7;
-  color: var(--muted, #5b6472);
+  color: var(--text-subtle, #667085);
 }
 
 /* Configuration notice -------------------------------------------------- */
@@ -198,7 +208,7 @@
 
 .config-notice code,
 .auth code {
-  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-family: var(--font-mono, ui-monospace, "Consolas", monospace);
   font-size: 0.86em;
   background: color-mix(in srgb, var(--muted, #5b6472) 14%, transparent);
   padding: 1px 6px;

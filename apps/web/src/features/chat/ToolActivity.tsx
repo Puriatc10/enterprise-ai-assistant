@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import type { ToolUsage } from "../../services/api";
 
 interface ToolActivityProps {
@@ -5,7 +7,7 @@ interface ToolActivityProps {
 }
 
 /**
- * Backend outcome taxonomy, translated. Anything not listed falls back to the raw
+ * Backend outcome taxonomy, translated. Anything unlisted falls back to the raw
  * status so a new backend value shows up as itself instead of a wrong Persian
  * word — a lying label is worse than an untranslated one.
  */
@@ -21,50 +23,40 @@ const STATUS_LABELS: Record<string, string> = {
 
 const FA_NUMBER = new Intl.NumberFormat("fa-IR");
 
+/** No number is invented: an unmeasurable latency is simply not printed. */
 function formatLatency(latencyMs: number): string | null {
-  // No number is invented: an unmeasurable latency is simply not printed.
   if (!Number.isFinite(latencyMs)) return null;
   return `${FA_NUMBER.format(Math.round(latencyMs))}ms`;
 }
 
-export function ToolActivity({ tools }: ToolActivityProps) {
-  if (tools.length === 0) return null;
+/**
+ * Provenance for one answer: which tools were read, whether they answered, and
+ * how long they took. It sits under the answer it belongs to, like a citation
+ * list, because that is the claim it supports.
+ */
+export function ToolActivity({ tools }: ToolActivityProps): JSX.Element {
+  // The caller decides when provenance is relevant. An empty fragment keeps the
+  // contract (always an element) without drawing an empty rail.
+  if (tools.length === 0) return <></>;
 
   return (
-    // No aria-label here: <p> maps to role=paragraph, which cannot take one. The
-    // visible «ابزارها:» prefix already names the line for every reader.
-    <p className="chat-tools">
-      <span className="chat-tools__label">ابزارها:</span>
-      {tools.map((tool, index) => {
-        const label = STATUS_LABELS[tool.status] ?? tool.status;
-        const latency = formatLatency(tool.latency_ms);
-        const isOk = tool.status === "ok";
+    <div className="tools">
+      <span className="tools__label">ابزارها</span>
+      <ul className="tools__list" aria-label="ابزارهای استفاده‌شده در این پاسخ">
+        {tools.map((tool, index) => {
+          const label = STATUS_LABELS[tool.status] ?? tool.status;
+          const latency = formatLatency(tool.latency_ms);
 
-        return (
-          <span key={`${tool.tool}-${index}`} className="chat-tools__item">
-            {index > 0 ? (
-              <span className="chat-tools__sep" aria-hidden="true">
-                ·
-              </span>
-            ) : null}
-            <code className="chat-ltr chat-tools__name">{tool.tool}</code>
-            <span className="chat-tools__sep" aria-hidden="true">
-              ·
-            </span>
-            <span className={isOk ? "chat-tools__status chat-tools__status--ok" : "chat-tools__status"}>
-              {label}
-            </span>
-            {latency ? (
-              <>
-                <span className="chat-tools__sep" aria-hidden="true">
-                  ·
-                </span>
-                <span className="chat-ltr chat-tools__latency">{latency}</span>
-              </>
-            ) : null}
-          </span>
-        );
-      })}
-    </p>
+          return (
+            <li key={`${tool.tool}-${index}`} className="tool" data-state={tool.status === "ok" ? "ok" : "warn"}>
+              <span className="tool__dot" aria-hidden="true" />
+              <code className="tool__name ltr">{tool.tool}</code>
+              <span className="tool__status">{label}</span>
+              {latency !== null ? <span className="tool__latency ltr">{latency}</span> : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

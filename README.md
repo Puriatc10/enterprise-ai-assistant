@@ -6,10 +6,11 @@ A web-based enterprise assistant that answers natural-language questions about d
 spread across multiple organizational systems — by calling narrowly scoped, read-only
 tools and composing the answer from what those tools actually returned.
 
-> **Status: Phase 6 — tested, deployable, demonstrable.** The primary journey is covered by
-> an HTTP-level test (sign in → ask → grounded answer with tool provenance → reload), the
-> browser client has unit tests, and `render.yaml` describes a two-service deployment with
-> the free tier's limits written down. Not yet deployed, and not production-ready.
+> **Status: Phases 7–9 complete — multi-source, streaming, hardened.** Three data domains
+> (insurance, support, CRM) behind one orchestrator, a Persian RTL interface with
+> token-based light/dark themes and SSE streaming, per-user rate limiting, and measured
+> tool routing (92 %). Deployment is prepared in `render.yaml` but **not applied**, and the
+> live Supabase row-level-security path is unverified without a confirmed user.
 
 ---
 
@@ -46,14 +47,14 @@ authorized server-side before any connector runs.
 
 | Capability | State |
 |---|---|
-| Web chat interface (React + TypeScript) | **implemented** — RTL Persian chat, history, tool provenance |
+| Web chat interface (React + TypeScript) | **implemented** — RTL Persian chat, SSE streaming, markdown, history, tool provenance, dark mode |
 | Backend API (FastAPI) | health + conversations + send turn |
 | Provider-independent LLM abstraction | port + LiteLLM adapter, OpenRouter verified |
 | Function / tool calling with validation | **implemented** — registry + guarded executor |
 | Multiple read-only data connectors | **3 domains / 8 tools** — insurance (mock), support (SQLite), CRM (PostgreSQL) |
 | Supabase auth + persistence | JWT verification + RLS-scoped repository |
 | Docker-based dev environment | working |
-| Python packaging & tests | 172 backend tests (5 PostgreSQL integration in CI) + 11 client tests |
+| Python packaging & tests | 265 backend tests (10 PostgreSQL integration in CI) + 21 client tests |
 
 Deliberately **out of scope for the MVP**: write operations against external systems,
 CRUD on customer data, connector management UI, dynamic connector configuration,
@@ -264,6 +265,7 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/decisions/ADR-0006-browser-auth.md`](docs/decisions/ADR-0006-browser-auth.md) | browser auth, the error envelope, and why the turn reports `tools_used` |
 | [`docs/decisions/ADR-0007-deployment.md`](docs/decisions/ADR-0007-deployment.md) | Render topology, the free tier accepted on purpose, CORS as an exact origin |
 | [`docs/decisions/ADR-0008-multi-source.md`](docs/decisions/ADR-0008-multi-source.md) | domains as registries; read-only enforced per engine; scope in SQL because a direct connection bypasses RLS |
+| [`docs/decisions/ADR-0009-interface-streaming.md`](docs/decisions/ADR-0009-interface-streaming.md) | tokens over a framework, streaming rules, sanitised markdown, lazy chat chunk |
 | [`docs/analysis/PHASE7-ROUTING.md`](docs/analysis/PHASE7-ROUTING.md) | measured routing accuracy with eight tools, including the one miss |
 | [`docs/development/DEPLOYMENT.md`](docs/development/DEPLOYMENT.md) | how to deploy, and what the free tier costs in behaviour |
 | [`docs/DEMO.md`](docs/DEMO.md) | the five-minute walkthrough, with its failure modes |

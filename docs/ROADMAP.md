@@ -117,6 +117,36 @@ and lands with the frontend in Phase 5.
 
 ---
 
+## Phase 4 — Data Connectors ✅
+
+- ✅ **Mock connector** promoted from a test double to a coherent demonstration source —
+  deterministic per-subject portfolio, so a foreign policy id genuinely resolves to
+  `not_found` (`infrastructure/connectors/mock/policies.py`).
+- ✅ **PostgreSQL connector**: named operations only, every query inside a `READ ONLY`
+  transaction with a statement timeout, server-side `LIMIT`, identity bound from the
+  verified context, rows projected to the public field set
+  (`infrastructure/connectors/postgres/policies.py`).
+- ✅ **Didar24 connector**: **blocked by design** — no authorized API exists (ADR-0002).
+  No code is written against an unpublished contract; a DayPI agreement comes first.
+- ✅ **External REST connector**: allowlisted operations only, no redirects, no caller
+  URLs, streaming size cap, typed status mapping
+  (`infrastructure/connectors/external_api/rest.py`).
+- ✅ Standardized `ConnectorResult` and a shared projection in `domain/models/policies.py`,
+  so no adapter can decide on its own what a model may see.
+
+Exit criteria met: two independent sources (`mock`, `postgres`) answer through the same
+registry, executor and `ChatService` without a line of orchestration changing —
+`tests/test_connector_swap.py`. The PostgreSQL controls are proven against a real server
+in CI (`tests/integration/test_postgres_live.py`, `postgres:16` service container),
+including that the read-only role cannot write and that a `READ ONLY` transaction refuses
+a write even for a privileged role.
+
+**Known limit:** the available deployment target for the demo is Supabase, whose PostgREST
+already covers the "structured data" case; the standalone PostgreSQL connector exists for
+future on-premise sources and is exercised in CI rather than in the demo.
+
+---
+
 ## Phase 4 — Data Connectors
 
 - **Mock connector** promoted from a test double to a coherent demonstration source.
@@ -131,6 +161,7 @@ Exit criteria: at least two independent sources answer through the same orchestr
 without orchestration changes.
 
 ---
+
 
 ## Phase 5 — Frontend and End-to-End Integration
 

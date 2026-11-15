@@ -51,7 +51,7 @@ authorized server-side before any connector runs.
 | Backend API (FastAPI) | health + conversations + send turn |
 | Provider-independent LLM abstraction | port + LiteLLM adapter, OpenRouter verified |
 | Function / tool calling with validation | **implemented** — registry + guarded executor |
-| Multiple read-only data connectors | mock connector live; Postgres/REST in Phase 4 |
+| Multiple read-only data connectors | mock (demo), PostgreSQL (CI-verified), REST (allowlisted) |
 | Supabase auth + persistence | JWT verification + RLS-scoped repository |
 | Docker-based dev environment | working |
 | Python packaging & tests | working (1 health test) |
@@ -238,6 +238,7 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/decisions/ADR-0002-didar24-access-path.md`](docs/decisions/ADR-0002-didar24-access-path.md) | why the mock connector is the primary data path |
 | [`docs/decisions/ADR-0003-provider-selection.md`](docs/decisions/ADR-0003-provider-selection.md) | why the MVP runs on OpenRouter rather than Gemini |
 | [`docs/decisions/ADR-0004-tool-execution.md`](docs/decisions/ADR-0004-tool-execution.md) | the tool execution model: allowlist, refusals as data, identity from context |
+| [`docs/decisions/ADR-0005-connector-model.md`](docs/decisions/ADR-0005-connector-model.md) | one connector contract; read-only enforced twice; projection owned by the domain |
 | [`docs/analysis/PHASE1-DIDAR24.md`](docs/analysis/PHASE1-DIDAR24.md) | Phase 1 evidence: what Didar24 exposes, and what it does not |
 | [`docs/analysis/PHASE1-LLM.md`](docs/analysis/PHASE1-LLM.md) | Phase 1 evidence: measured tool-calling results, and the adapter rules they imply |
 | [`docs/development/DEVELOPMENT.md`](docs/development/DEVELOPMENT.md) | environment details, ports, troubleshooting |

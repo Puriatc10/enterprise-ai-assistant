@@ -27,6 +27,7 @@ from app.domain.interfaces.connector import (
     FetchSpec,
 )
 from app.domain.models.auth import AuthContext
+from app.domain.models.policies import STATUS_ACTIVE, project_policies, project_policy
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +61,6 @@ _POLICY_TEMPLATES: tuple[dict[str, Any], ...] = (
     },
 )
 
-#: Fields safe to hand to a model: no national id, no address, no contact details.
-_PUBLIC_FIELDS = (
-    "policy_id",
-    "type",
-    "status",
-    "insurer",
-    "start_date",
-    "end_date",
-    "premium_toman",
-)
-
 
 def _subject_token(subject: str) -> str:
     """Short, stable, non-identifying token derived from the subject."""
@@ -88,10 +78,6 @@ def portfolio_for(subject: str) -> list[dict[str, Any]]:
         {"policy_id": f"POL-{token}-{index}", **template}
         for index, template in enumerate(_POLICY_TEMPLATES, start=1)
     ]
-
-
-def _project(policy: dict[str, Any]) -> dict[str, Any]:
-    return {field: policy[field] for field in _PUBLIC_FIELDS if field in policy}
 
 
 class MockPolicyConnector:
@@ -115,7 +101,7 @@ class MockPolicyConnector:
         if spec.operation == "list_policies":
             return ConnectorResult(
                 status=ConnectorStatus.OK,
-                data={"policies": [_project(policy) for policy in policies]},
+                data={"policies": project_policies(policies)},
             )
 
         if spec.operation == "count_policies":
@@ -123,7 +109,9 @@ class MockPolicyConnector:
                 status=ConnectorStatus.OK,
                 data={
                     "count": len(policies),
-                    "active_count": sum(1 for policy in policies if policy["status"] == "فعال"),
+                    "active_count": sum(
+                        1 for policy in policies if policy["status"] == STATUS_ACTIVE
+                    ),
                 },
             )
 
@@ -137,7 +125,7 @@ class MockPolicyConnector:
 
         for policy in policies:
             if policy["policy_id"] == policy_id.strip():
-                return ConnectorResult(status=ConnectorStatus.OK, data=_project(policy))
+                return ConnectorResult(status=ConnectorStatus.OK, data=project_policy(policy))
 
         return ConnectorResult(
             status=ConnectorStatus.NOT_FOUND,

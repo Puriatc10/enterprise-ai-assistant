@@ -19,10 +19,12 @@ from app.application.tools.executor import ToolExecutor
 from app.application.tools.policies import build_policy_registry
 from app.application.tools.registry import ToolRegistry
 from app.core.config import Settings, get_settings
+from app.domain.interfaces.connector import DataConnectorPort
 from app.domain.interfaces.llm import LLMPort
 from app.domain.interfaces.repository import ConversationRepository
 from app.domain.models.auth import AuthContext
 from app.infrastructure.connectors.mock.policies import MockPolicyConnector
+from app.infrastructure.connectors.postgres.policies import PostgresPolicyConnector
 from app.infrastructure.llm.litellm_adapter import LiteLLMAdapter
 from app.infrastructure.persistence.supabase import SupabaseConversationRepository
 from app.security.auth import require_auth_context
@@ -169,6 +171,27 @@ ConversationRepositoryDep = Annotated[ConversationRepository, Depends(get_conver
 AuthContextDep = Annotated[AuthContext, Depends(require_auth_context)]
 
 
+def build_policy_connector(settings: Settings) -> DataConnectorPort:
+    """Choose the adapter that answers policy questions.
+
+    One place decides which source is live, so the tool layer and the orchestrator stay
+    unaware of it. ``postgres`` without a DSN is a configuration error, not something to
+    paper over with a silent fallback to synthetic data — falling back would answer
+    confidently from the wrong source.
+    """
+    if settings.policies_source == "postgres":
+        dsn = settings.postgres_dsn
+        if dsn is None:
+            msg = "POLICIES_SOURCE=postgres requires CONNECTOR_POSTGRES_URL"
+            raise RuntimeError(msg)
+        return PostgresPolicyConnector(
+            dsn=dsn,
+            row_limit=settings.postgres_row_limit,
+            statement_timeout_ms=settings.postgres_statement_timeout_ms,
+        )
+    return MockPolicyConnector()
+
+
 def get_tool_registry(request: Request) -> ToolRegistry:
     """The registered tools.
 
@@ -177,7 +200,7 @@ def get_tool_registry(request: Request) -> ToolRegistry:
     """
     registry = getattr(request.app.state, "tool_registry", None)
     if registry is None:
-        registry = build_policy_registry(MockPolicyConnector())
+        registry = build_policy_registry(build_policy_connector(get_settings()))
         request.app.state.tool_registry = registry
     return registry
 

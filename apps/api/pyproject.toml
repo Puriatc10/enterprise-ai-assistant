@@ -16,6 +16,9 @@ dependencies = [
 # The LLM stack is optional so the Phase 0 skeleton installs, boots and tests
 # without it. Phase 1 onward: `uv sync --extra llm`.
 llm = ["litellm>=1.60"]
+# The Postgres connector is optional too: the mock source needs no driver, and the
+# base install must stay small. Phase 4 onward: `uv sync --extra postgres`.
+postgres = ["asyncpg>=0.30"]
 
 [dependency-groups]
 dev = [

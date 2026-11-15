@@ -71,13 +71,39 @@ class Settings(BaseSettings):
     didar_api_base_url: str | None = None
     didar_api_key: SecretStr | None = None
     didar_timeout_seconds: float = 10.0
+
+    # Which adapter answers policy questions. "mock" needs nothing and is the
+    # documented demonstration path (ADR-0002); "postgres" reads a real database
+    # with read-only credentials (ADR-0005).
+    policies_source: str = "mock"
     connector_postgres_url: SecretStr | None = None
+    postgres_row_limit: int = 50
+    postgres_statement_timeout_ms: int = 5_000
 
     # -- validation -------------------------------------------------------
-    @field_validator("app_env", "log_level", "llm_provider")
+    @field_validator("app_env", "log_level", "llm_provider", "policies_source")
     @classmethod
     def _strip_and_lower(cls, value: str) -> str:
         return value.strip().lower()
+
+    @field_validator("policies_source")
+    @classmethod
+    def _known_source(cls, value: str) -> str:
+        allowed = {"mock", "postgres"}
+        if value not in allowed:
+            msg = f"policies_source must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("postgres_row_limit")
+    @classmethod
+    def _bounded_row_limit(cls, value: int) -> int:
+        # The connector refuses anything above 100 as well; this catches a bad .env
+        # at boot rather than at the first query.
+        if not 1 <= value <= 100:
+            msg = "postgres_row_limit must be between 1 and 100"
+            raise ValueError(msg)
+        return value
 
     @field_validator("agent_max_tool_rounds")
     @classmethod
@@ -139,6 +165,14 @@ class Settings(BaseSettings):
         return key is not None and bool(key.strip())
 
     # -- Supabase derived endpoints ---------------------------------------
+    @property
+    def postgres_dsn(self) -> str | None:
+        """Connection string for the read-only policy connector, if configured."""
+        if self.connector_postgres_url is None:
+            return None
+        dsn = self.connector_postgres_url.get_secret_value().strip()
+        return dsn or None
+
     @property
     def supabase_configured(self) -> bool:
         """Whether storage/auth can be reached at all (URL + public key present)."""

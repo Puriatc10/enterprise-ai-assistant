@@ -24,9 +24,8 @@ from app.api.routes.health import SERVICE_NAME
 from app.application.tools.executor import ToolExecutor
 from app.application.tools.policies import build_policy_registry
 from app.core.config import Settings, get_settings
-from app.core.dependencies import build_token_verifier
+from app.core.dependencies import build_policy_connector, build_token_verifier
 from app.core.logging import configure_logging
-from app.infrastructure.connectors.mock.policies import MockPolicyConnector
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +44,15 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
     # Tools: the registry is the allowlist, the executor is the choke point. Built
     # here so both are process-wide and validated before the first request.
-    connector = MockPolicyConnector()
+    connector = build_policy_connector(settings)
     registry = build_policy_registry(connector)
     application.state.tool_registry = registry
     application.state.tool_executor = ToolExecutor(registry=registry)
 
     logger.info(
         "startup service=%s env=%s version=%s llm_provider=%s llm_model=%s "
-        "llm_configured=%s supabase_configured=%s auth_enabled=%s tools=%d",
+        "llm_configured=%s supabase_configured=%s auth_enabled=%s "
+        "policies_source=%s tools=%d",
         SERVICE_NAME,
         settings.app_env,
         settings.app_version,
@@ -61,6 +61,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         settings.llm_configured,
         settings.supabase_configured,
         application.state.token_verifier is not None,
+        connector.name,
         len(registry),
     )
     yield

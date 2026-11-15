@@ -55,6 +55,44 @@ jobs:
           "$RUNNER_TEMP/pkgcheck/bin/python" -m pip install --quiet .
           "$RUNNER_TEMP/pkgcheck/bin/python" -c "from app.main import app; print('import ok:', app.title)"
 
+  postgres:
+    name: api · integration (PostgreSQL)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    # A real server, because the controls being tested are server-side: role grants
+    # and READ ONLY transactions cannot be proven against a fake.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: connector_demo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_DSN: postgresql://postgres:postgres@localhost:5432/connector_demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Install dependencies with the postgres extra
+        run: uv sync --frozen --python ${{ env.PYTHON_VERSION }} --extra postgres
+
+      - name: Integration tests
+        run: uv run pytest tests/integration -v
+
   web:
     name: web · typecheck + build
     runs-on: ubuntu-latest

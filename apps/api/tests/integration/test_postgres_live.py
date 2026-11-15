@@ -72,14 +72,14 @@ def _with_credentials(dsn: str, user: str, password: str) -> str:
     return urlunsplit((parts.scheme, f"{user}:{password}@{host}{port}", f"/{database}", "", ""))
 
 
-@pytest.fixture(scope="module")
-async def admin_dsn() -> str:
+@pytest.fixture
+def admin_dsn() -> str:
     assert DSN is not None
     return DSN
 
 
-@pytest.fixture(scope="module", autouse=True)
-async def seeded(admin_dsn: str):
+@pytest.fixture(autouse=True)
+async def seeded(admin_dsn: str) -> None:
     """Create the table, seed synthetic rows, and a genuinely read-only role."""
     connection = await asyncpg.connect(admin_dsn)
     try:

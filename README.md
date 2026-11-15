@@ -54,7 +54,7 @@ authorized server-side before any connector runs.
 | Multiple read-only data connectors | mock (demo), PostgreSQL (CI-verified), REST (allowlisted) |
 | Supabase auth + persistence | JWT verification + RLS-scoped repository |
 | Docker-based dev environment | working |
-| Python packaging & tests | working (1 health test) |
+| Python packaging & tests | 165 unit tests locally; 5 PostgreSQL integration tests run in CI |
 
 Deliberately **out of scope for the MVP**: write operations against external systems,
 CRUD on customer data, connector management UI, dynamic connector configuration,

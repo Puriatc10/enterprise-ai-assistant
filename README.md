@@ -160,22 +160,37 @@ cd enterprise-ai-assistant
 cp .env.example .env          # optional at Phase 0 — nothing is required to boot
 ```
 
-### Backend
+### The short version — one command
+
+```bash
+bash scripts/dev.sh        # API on :8000 + web on :5173; Ctrl-C stops both
+```
+
+Open <http://localhost:5173>. On a fresh clone, install first:
+
+```bash
+cd apps/api && uv sync --python 3.12 --extra llm && cd ../..
+cd apps/web && npm install && cd ../..
+cp .env.example .env.local     # then set VITE_API_BASE_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+```
+
+**Signing in:** this Supabase project has email confirmation enabled, so a new account gets
+no session until the link in the confirmation mail is opened. The app says exactly that;
+see `docs/development/DEVELOPMENT.md`.
+
+### Backend, on its own
 
 ```bash
 cd apps/api
-uv sync --python 3.12                       # base deps only
-uv run uvicorn app.main:app --reload --port 8000
+uv sync --python 3.12 --extra llm    # --extra llm is what lets it call a model
+.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
 Open <http://localhost:8000/health> → `{"status":"ok", ...}`.
 Interactive API docs: <http://localhost:8000/docs>.
 
-Adding the LLM stack (Phase 1 onward, needs a key to actually call a model):
-
-```bash
-uv sync --extra llm
-```
+The venv binary is used rather than `uv run` because on this host `uv run <tool>` has printed
+empty summaries ("no tests collected", exit 0); on Linux and in CI `uv run` is fine.
 
 ### Frontend
 

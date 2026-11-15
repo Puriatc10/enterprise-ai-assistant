@@ -22,16 +22,55 @@ ahead of what parts of the LLM/data ecosystem (LiteLLM, tokenizer/compiled depen
 fully support. `uv sync --python 3.12` pins the project interpreter regardless of the
 machine default, which also makes CI reproducible.
 
+## Start everything (one command)
+
+```bash
+bash scripts/dev.sh        # API on :8000, web on :5173 — Ctrl-C stops both
+```
+
+It checks the virtualenv, reseeds the support SQLite demo file if it is missing, then runs
+both processes and prints the two URLs. Ports can be overridden —
+`API_PORT=8010 WEB_PORT=5174 bash scripts/dev.sh` — and if you move the API port, update
+`VITE_API_BASE_URL` in the **repo-root** `.env.local` (Vite reads env from the root, not
+from `apps/web/`).
+
+Two terminals instead, when you want separate logs:
+
+```bash
+# terminal 1
+cd apps/api && .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+# terminal 2
+cd apps/web && npm run dev
+```
+
+Then open <http://localhost:5173>.
+
+### Signing in for the first time
+
+This project has **email confirmation enabled** — `/auth/v1/settings` returns
+`mailer_autoconfirm: false`, so `signUp` creates the user **without a session**. The app
+says so: «ثبت‌نام انجام شد. یک ایمیل تأیید برای شما ارسال شد؛ پس از تأیید ایمیل، وارد شوید.»
+
+Use an address you can actually open, click the link in the message, then sign in. There is
+no anonymous path and none should be enabled — identity is the whole authorization model.
+
 ## Backend
 
 ```bash
 cd apps/api
-uv sync --python 3.12          # base deps (no LLM stack)
-uv run uvicorn app.main:app --reload --port 8000
-uv run pytest -q
-uv run ruff check .
-uv run ruff format --check .
+uv sync --python 3.12 --extra llm     # --extra llm adds LiteLLM; without it the API boots but cannot answer
+.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+.venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/python.exe -m ruff check .
+.venv/Scripts/python.exe -m ruff format --check .
 ```
+
+Run the tools through the venv interpreter like this rather than `uv run <tool>`: on this
+host `uv run` has returned empty summaries ("No tests collected", exit 0) while the venv
+binary reported the real counts. On Linux/CI `uv run` behaves normally.
+
+`bash scripts/check_all.sh` runs exactly what CI runs, in the same order — use it before
+pushing instead of guessing which checks exist.
 
 Adding the LLM stack when Phase 1 starts:
 

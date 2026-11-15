@@ -147,7 +147,9 @@ describe("optimistic send", () => {
     });
 
     await waitFor(() => expect(result.current.isSending).toBe(true));
+    // The state update lands a microtask after the guard trips, so wait for it rather
+    // than reading messages in the same tick (this raced on slower CI runners).
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
     expect((sendMessage as Mock).mock.calls).toHaveLength(1);
-    expect(result.current.messages).toHaveLength(2);
   });
 });

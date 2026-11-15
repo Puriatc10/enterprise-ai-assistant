@@ -106,7 +106,9 @@ class Settings(BaseSettings):
     @field_validator("support_source")
     @classmethod
     def _known_support_source(cls, value: str) -> str:
-        allowed = {"sqlite", "mock", "disabled"}
+        # Only "sqlite" is implemented; "mock" is not offered so a config cannot promise
+        # a source that does not exist.
+        allowed = {"sqlite", "disabled"}
         if value not in allowed:
             msg = f"support_source must be one of {sorted(allowed)}"
             raise ValueError(msg)

@@ -251,9 +251,7 @@ class ChatService:
             raise ValueError("Message must not be empty.")
 
         if conversation_id is None:
-            conversation = await self._repository.create(
-                context=context, title=_title_from(text)
-            )
+            conversation = await self._repository.create(context=context, title=_title_from(text))
         else:
             conversation = await self._repository.get(
                 context=context, conversation_id=conversation_id

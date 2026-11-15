@@ -22,9 +22,8 @@ from app.api.errors import RequestIDMiddleware, install_error_handlers
 from app.api.router import api_router
 from app.api.routes.health import SERVICE_NAME
 from app.application.tools.executor import ToolExecutor
-from app.application.tools.policies import build_policy_registry
 from app.core.config import Settings, get_settings
-from app.core.dependencies import build_policy_connector, build_token_verifier
+from app.core.dependencies import build_token_verifier, build_tool_registry
 from app.core.logging import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -42,17 +41,16 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     # LLM adapter is built lazily on first use (it needs the provider SDK).
     application.state.token_verifier = build_token_verifier(settings)
 
-    # Tools: the registry is the allowlist, the executor is the choke point. Built
-    # here so both are process-wide and validated before the first request.
-    connector = build_policy_connector(settings)
-    registry = build_policy_registry(connector)
-    application.state.tool_registry = registry
-    application.state.tool_executor = ToolExecutor(registry=registry)
+    # Tools: one registry composed from every enabled domain. Built here so the
+    # composition is validated before the first request.
+    setup = build_tool_registry(settings)
+    application.state.tool_registry = setup.registry
+    application.state.tool_executor = ToolExecutor(registry=setup.registry)
 
     logger.info(
         "startup service=%s env=%s version=%s llm_provider=%s llm_model=%s "
         "llm_configured=%s supabase_configured=%s auth_enabled=%s "
-        "policies_source=%s tools=%d",
+        "domains=%s tools=%d",
         SERVICE_NAME,
         settings.app_env,
         settings.app_version,
@@ -61,8 +59,8 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         settings.llm_configured,
         settings.supabase_configured,
         application.state.token_verifier is not None,
-        connector.name,
-        len(registry),
+        ",".join(setup.domains),
+        len(setup.registry),
     )
     yield
     logger.info("shutdown service=%s", SERVICE_NAME)

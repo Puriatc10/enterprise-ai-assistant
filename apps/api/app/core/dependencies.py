@@ -10,21 +10,28 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 import httpx
 from fastapi import Depends, HTTPException, Request, status
 
+from app.application.tools.crm import build_crm_registry
 from app.application.tools.executor import ToolExecutor
+from app.application.tools.overview import build_overview_registry
 from app.application.tools.policies import build_policy_registry
 from app.application.tools.registry import ToolRegistry
+from app.application.tools.support import build_support_registry
 from app.core.config import Settings, get_settings
 from app.domain.interfaces.connector import DataConnectorPort
 from app.domain.interfaces.llm import LLMPort
 from app.domain.interfaces.repository import ConversationRepository
 from app.domain.models.auth import AuthContext
+from app.domain.models.sources import DomainDescriptor
 from app.infrastructure.connectors.mock.policies import MockPolicyConnector
+from app.infrastructure.connectors.postgres.crm import CrmConnector
 from app.infrastructure.connectors.postgres.policies import PostgresPolicyConnector
+from app.infrastructure.connectors.sqlite.support import SqliteSupportConnector
 from app.infrastructure.llm.litellm_adapter import LiteLLMAdapter
 from app.infrastructure.persistence.supabase import SupabaseConversationRepository
 from app.security.auth import require_auth_context
@@ -192,6 +199,81 @@ def build_policy_connector(settings: Settings) -> DataConnectorPort:
     return MockPolicyConnector()
 
 
+@dataclass(frozen=True, slots=True)
+class ToolSetup:
+    """A composed registry plus the domains that fed it."""
+
+    registry: ToolRegistry
+    domains: tuple[str, ...]
+
+
+def build_tool_registry(settings: Settings) -> ToolSetup:
+    """Compose every enabled domain into one registry.
+
+    This is the only place that decides which sources are live, so the orchestrator never
+    learns a domain exists. A domain that is configured but unreachable still composes:
+    its tools answer with a typed error instead of vanishing, which is far easier to
+    diagnose than a silently shorter tool list.
+    """
+    domain_registries: list[ToolRegistry] = []
+    descriptors: list[DomainDescriptor] = []
+
+    def add(descriptor_id: str, label: str, description: str, registry: ToolRegistry) -> None:
+        domain_registries.append(registry)
+        descriptors.append(
+            DomainDescriptor(
+                id=descriptor_id,
+                label=label,
+                description=description,
+                tools=registry.names,
+            )
+        )
+
+    add(
+        "insurance",
+        "بیمه",
+        "بیمه‌نامه‌های سازمانی کاربر",
+        build_policy_registry(build_policy_connector(settings)),
+    )
+
+    if settings.support_source == "sqlite":
+        add(
+            "support",
+            "پشتیبانی",
+            "تیکت‌های پشتیبانی ثبت‌شده برای کاربر",
+            build_support_registry(
+                SqliteSupportConnector(
+                    path=settings.support_sqlite_path,
+                    row_limit=settings.postgres_row_limit,
+                )
+            ),
+        )
+
+    if settings.crm_source == "postgres":
+        dsn = settings.postgres_dsn
+        if dsn is None:
+            msg = "CRM_SOURCE=postgres requires CONNECTOR_POSTGRES_URL"
+            raise RuntimeError(msg)
+        add(
+            "crm",
+            "CRM",
+            "حساب مشتری و معاملات فروش",
+            build_crm_registry(
+                CrmConnector(
+                    dsn=dsn,
+                    row_limit=settings.postgres_row_limit,
+                    statement_timeout_ms=settings.postgres_statement_timeout_ms,
+                )
+            ),
+        )
+
+    # The capability tool goes in last: it describes what the composed registry holds, so
+    # it must not be able to describe itself as missing.
+    composed = domain_registries[0].compose(*domain_registries[1:])
+    registry = composed.compose(build_overview_registry(descriptors))
+    return ToolSetup(registry=registry, domains=tuple(item.id for item in descriptors))
+
+
 def get_tool_registry(request: Request) -> ToolRegistry:
     """The registered tools.
 
@@ -200,7 +282,7 @@ def get_tool_registry(request: Request) -> ToolRegistry:
     """
     registry = getattr(request.app.state, "tool_registry", None)
     if registry is None:
-        registry = build_policy_registry(build_policy_connector(get_settings()))
+        registry = build_tool_registry(get_settings()).registry
         request.app.state.tool_registry = registry
     return registry
 

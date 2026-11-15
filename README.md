@@ -50,7 +50,7 @@ authorized server-side before any connector runs.
 | Backend API (FastAPI) | health + conversations + send turn |
 | Provider-independent LLM abstraction | port + LiteLLM adapter, OpenRouter verified |
 | Function / tool calling with validation | **implemented** — registry + guarded executor |
-| Multiple read-only data connectors | mock (demo), PostgreSQL (CI-verified), REST (allowlisted) |
+| Multiple read-only data connectors | **3 domains / 8 tools** — insurance (mock), support (SQLite), CRM (PostgreSQL) |
 | Supabase auth + persistence | JWT verification + RLS-scoped repository |
 | Docker-based dev environment | working |
 | Python packaging & tests | 172 backend tests (5 PostgreSQL integration in CI) + 11 client tests |
@@ -220,6 +220,9 @@ the application database is logically separate from connector data sources.
 | Task | Command |
 |---|---|
 | **Everything CI runs** | `bash scripts/check_all.sh` |
+| Seed the support database | `cd apps/api && .venv/Scripts/python.exe scripts/seed_support_sqlite.py` |
+| Seed the CRM demo account | `cd apps/api && .venv/Scripts/python.exe scripts/seed_crm.py --dsn <url> --subject <uuid>` |
+| Measure tool routing | `cd apps/api && .venv/Scripts/python.exe scripts/route_eval.py` |
 | Run API (reload) | `cd apps/api && uv run uvicorn app.main:app --reload` |
 | Backend tests | `cd apps/api && uv run pytest` |
 | Lint | `cd apps/api && uv run ruff check .` |
@@ -260,6 +263,8 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/decisions/ADR-0005-connector-model.md`](docs/decisions/ADR-0005-connector-model.md) | one connector contract; read-only enforced twice; projection owned by the domain |
 | [`docs/decisions/ADR-0006-browser-auth.md`](docs/decisions/ADR-0006-browser-auth.md) | browser auth, the error envelope, and why the turn reports `tools_used` |
 | [`docs/decisions/ADR-0007-deployment.md`](docs/decisions/ADR-0007-deployment.md) | Render topology, the free tier accepted on purpose, CORS as an exact origin |
+| [`docs/decisions/ADR-0008-multi-source.md`](docs/decisions/ADR-0008-multi-source.md) | domains as registries; read-only enforced per engine; scope in SQL because a direct connection bypasses RLS |
+| [`docs/analysis/PHASE7-ROUTING.md`](docs/analysis/PHASE7-ROUTING.md) | measured routing accuracy with eight tools, including the one miss |
 | [`docs/development/DEPLOYMENT.md`](docs/development/DEPLOYMENT.md) | how to deploy, and what the free tier costs in behaviour |
 | [`docs/DEMO.md`](docs/DEMO.md) | the five-minute walkthrough, with its failure modes |
 | [`docs/PLAN-PHASE-7-9.md`](docs/PLAN-PHASE-7-9.md) | the post-MVP review and the plan for multi-source, the new interface, and hardening |

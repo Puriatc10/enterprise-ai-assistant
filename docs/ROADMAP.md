@@ -207,13 +207,27 @@ user. Until that URL exists, the claim "publicly demonstrable" is prepared, not 
 
 ---
 
-## Phases 7–9 — planned
+## Phase 7 — Multi-source capability ✅
 
-A review of the finished MVP and the plan that follows it live in
-[`PLAN-PHASE-7-9.md`](PLAN-PHASE-7-9.md): more data domains (support tickets on SQLite,
-CRM on PostgreSQL), an interface rebuilt around streaming and typography, and the
-hardening needed to leave it running in front of strangers. Awaiting approval before
-implementation.
+- ✅ Three domains composed into one registry at startup, with no change to `ChatService`,
+  the executor or the routes: insurance (mock, ADR-0002), support tickets (**SQLite,
+  read-only at the engine**), CRM (PostgreSQL, `SELECT`-only role) — ADR-0008.
+- ✅ Eight tools: the original four, `support_count_my_tickets` / `support_list_my_tickets`
+  / `support_get_ticket`, `crm_list_my_deals` / `crm_summarize_my_pipeline` /
+  `crm_get_account`, plus `list_my_data_sources`.
+- ✅ Cross-domain question answered in one turn with both tool calls visible
+  (`tests/test_multi_source.py`).
+- ✅ Seeded data as reviewable SQL: `data/support_demo.sql` + a seeder, and
+  `supabase/migrations/0002_crm_demo.sql` + `scripts/seed_crm.py`.
+- ✅ Routing **measured**: 11/12 = 92 % with 8 tools on the live model, miss recorded
+  (`docs/analysis/PHASE7-ROUTING.md`).
+
+Not verified: the CRM migration against the live Supabase project — it was exercised on a
+throwaway `postgres:16` container, because no administrative connection exists here.
+
+---
+
+## Phases 8–9 — planned
 
 ---
 

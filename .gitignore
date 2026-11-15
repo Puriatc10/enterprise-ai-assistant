@@ -3,6 +3,10 @@
 # ---------------------------------------------------------------------------
 .env
 .env.*
+
+# Generated demo databases: the reviewable source is apps/api/data/support_demo.sql
+apps/api/data/*.sqlite3
+apps/api/data/*.sqlite3-journal
 !.env.example
 *.pem
 *.key

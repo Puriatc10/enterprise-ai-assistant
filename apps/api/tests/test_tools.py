@@ -228,6 +228,27 @@ def test_argument_hash_is_stable_and_does_not_contain_the_arguments() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Composition across domains
+# ---------------------------------------------------------------------------
+
+
+def test_compose_merges_domains_and_still_rejects_duplicates() -> None:
+    """Adding a domain must not be a chance to shadow an existing tool."""
+    policies = ToolRegistry([_tool("get_my_policy_count")])
+    support = ToolRegistry([_tool("support_count_my_tickets"), _tool("support_list_my_tickets")])
+
+    merged = policies.compose(support)
+
+    assert merged.names == (
+        "get_my_policy_count",
+        "support_count_my_tickets",
+        "support_list_my_tickets",
+    )
+    with pytest.raises(ValueError, match="Duplicate"):
+        policies.compose(ToolRegistry([_tool("get_my_policy_count")]))
+
+
+# ---------------------------------------------------------------------------
 # Mock connector, through the real tool registry
 # ---------------------------------------------------------------------------
 

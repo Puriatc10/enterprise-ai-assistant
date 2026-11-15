@@ -103,6 +103,19 @@ class ToolRegistry:
             tool.spec() for tool in self._tools.values() if context.has_scopes(tool.required_scopes)
         )
 
+    def compose(self, *others: ToolRegistry) -> ToolRegistry:
+        """Merge this registry with others into a new one.
+
+        This is how domains are added without touching the orchestrator: each domain
+        module returns its own registry and startup merges them. Merging goes through
+        the constructor on purpose, so a name collision across two domains still fails
+        at startup instead of one silently shadowing the other.
+        """
+        merged: list[ToolDefinition] = [*self._tools.values()]
+        for other in others:
+            merged.extend(other._tools.values())
+        return ToolRegistry(merged)
+
     def __len__(self) -> int:
         return len(self._tools)
 

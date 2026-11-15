@@ -80,11 +80,46 @@ class Settings(BaseSettings):
     postgres_row_limit: int = 50
     postgres_statement_timeout_ms: int = 5_000
 
+    # -- support tickets (SQLite, read-only file) — ADR-0008 -----------------
+    # "sqlite" reads a seeded file; "mock" generates in-memory; "disabled" omits the
+    # domain entirely. The file is created by scripts/seed_support_sqlite.py, never by
+    # the running application (no runtime writes).
+    support_source: str = "sqlite"
+    support_sqlite_path: str = "data/demo_support.sqlite3"
+
+    # -- CRM (customers, deals) on a read-only PostgreSQL connection --------
+    # Off by default: it needs a reachable database, a `crm` schema and a SELECT-only
+    # role, so turning it on is a deliberate environment decision.
+    crm_source: str = "disabled"
+
     # -- validation -------------------------------------------------------
     @field_validator("app_env", "log_level", "llm_provider", "policies_source")
     @classmethod
     def _strip_and_lower(cls, value: str) -> str:
         return value.strip().lower()
+
+    @field_validator("support_source", "crm_source")
+    @classmethod
+    def _strip_source(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("support_source")
+    @classmethod
+    def _known_support_source(cls, value: str) -> str:
+        allowed = {"sqlite", "mock", "disabled"}
+        if value not in allowed:
+            msg = f"support_source must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("crm_source")
+    @classmethod
+    def _known_crm_source(cls, value: str) -> str:
+        allowed = {"postgres", "disabled"}
+        if value not in allowed:
+            msg = f"crm_source must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return value
 
     @field_validator("policies_source")
     @classmethod

@@ -262,6 +262,7 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/decisions/ADR-0007-deployment.md`](docs/decisions/ADR-0007-deployment.md) | Render topology, the free tier accepted on purpose, CORS as an exact origin |
 | [`docs/development/DEPLOYMENT.md`](docs/development/DEPLOYMENT.md) | how to deploy, and what the free tier costs in behaviour |
 | [`docs/DEMO.md`](docs/DEMO.md) | the five-minute walkthrough, with its failure modes |
+| [`docs/PLAN-PHASE-7-9.md`](docs/PLAN-PHASE-7-9.md) | the post-MVP review and the plan for multi-source, the new interface, and hardening |
 | [`docs/analysis/PHASE1-DIDAR24.md`](docs/analysis/PHASE1-DIDAR24.md) | Phase 1 evidence: what Didar24 exposes, and what it does not |
 | [`docs/analysis/PHASE1-LLM.md`](docs/analysis/PHASE1-LLM.md) | Phase 1 evidence: measured tool-calling results, and the adapter rules they imply |
 | [`docs/development/DEVELOPMENT.md`](docs/development/DEVELOPMENT.md) | environment details, ports, troubleshooting |

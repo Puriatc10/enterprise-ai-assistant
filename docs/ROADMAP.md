@@ -207,8 +207,17 @@ user. Until that URL exists, the claim "publicly demonstrable" is prepared, not 
 
 ---
 
-## Future Phase — Knowledge Retrieval (RAG)
+## Phases 7–9 — planned
 
+A review of the finished MVP and the plan that follows it live in
+[`PLAN-PHASE-7-9.md`](PLAN-PHASE-7-9.md): more data domains (support tickets on SQLite,
+CRM on PostgreSQL), an interface rebuilt around streaming and typography, and the
+hardening needed to leave it running in front of strangers. Awaiting approval before
+implementation.
+
+---
+
+## Future Phase — Knowledge Retrieval (RAG)
 Only when there are real documents and a paid/self-hosted model path:
 
 - document ingestion (chunking, metadata, provenance);

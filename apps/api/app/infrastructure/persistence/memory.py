@@ -86,14 +86,44 @@ class InMemoryConversationRepository:
     async def get(self, *, context: AuthContext, conversation_id: str) -> Conversation:
         return self._to_conversation(self._owned(context, conversation_id))
 
-    async def list_recent(self, *, context: AuthContext, limit: int = 20) -> list[Conversation]:
+    async def list_recent(
+        self,
+        *,
+        context: AuthContext,
+        limit: int = 20,
+        before: datetime | None = None,
+    ) -> list[Conversation]:
         owned = [
             row
             for row in self._conversations.values()
             if row.user_id == context.subject and row.tenant_id == context.tenant_id
         ]
+        if before is not None:
+            owned = [row for row in owned if row.updated_at < before]
         owned.sort(key=lambda row: row.updated_at, reverse=True)
         return [self._to_conversation(row) for row in owned[:limit]]
+
+    async def rename(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        title: str,
+    ) -> Conversation:
+        row = self._owned(context, conversation_id)
+        row.title = title
+        row.updated_at = self._clock()
+        return self._to_conversation(row)
+
+    async def delete(self, *, context: AuthContext, conversation_id: str) -> None:
+        row = self._owned(context, conversation_id)
+        # Messages and audit rows go with it: the database does this with ON DELETE
+        # CASCADE, so the in-memory adapter must not quietly behave differently.
+        self._messages = [
+            message for message in self._messages if message.conversation_id != row.id
+        ]
+        self._audit = [entry for entry in self._audit if entry.get("conversation_id") != row.id]
+        del self._conversations[row.id]
 
     async def append_message(
         self,

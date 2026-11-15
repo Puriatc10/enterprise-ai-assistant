@@ -14,15 +14,16 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from app.application.orchestration.chat import ChatService, EmptyAnswerError
 from app.core.dependencies import (
     AuthContextDep,
     ConversationRepositoryDep,
     LLMPortDep,
+    RateLimiterDep,
     ToolExecutorDep,
     ToolRegistryDep,
 )
@@ -32,9 +33,22 @@ from app.domain.interfaces.llm import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from app.domain.models.auth import AuthContext
 from app.domain.models.conversation import StreamEvent, StreamEventKind, Usage
+from app.security.rate_limit import RateLimitExceeded, TurnRateLimiter
 
 logger = logging.getLogger(__name__)
+
+
+def _enforce_rate_limit(limiter: TurnRateLimiter, context: AuthContext) -> None:
+    """Spend one turn from the caller's window, or refuse with the wait.
+
+    Called before any model work: a limited caller must not cost a provider call.
+    """
+    decision = limiter.check(context.subject)
+    if not decision.allowed:
+        raise RateLimitExceeded(decision.retry_after_seconds)
+
 
 router = APIRouter(prefix="/conversations", tags=["chat"])
 
@@ -63,6 +77,12 @@ class MessageResponse(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
+
+
+class RenameConversationRequest(BaseModel):
+    # Stripped and non-empty by the model, not by the handler: a blank title is the
+    # caller's mistake and deserves a 422, not a stored empty string.
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
 class ToolUsageResponse(BaseModel):
@@ -106,8 +126,12 @@ async def list_conversations(
     context: AuthContextDep,
     repository: ConversationRepositoryDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    before: Annotated[
+        datetime | None,
+        Query(description="Keyset cursor: only conversations updated before this instant."),
+    ] = None,
 ) -> list[ConversationResponse]:
-    conversations = await repository.list_recent(context=context, limit=limit)
+    conversations = await repository.list_recent(context=context, limit=limit, before=before)
     return [
         ConversationResponse(
             id=item.id,
@@ -117,6 +141,43 @@ async def list_conversations(
         )
         for item in conversations
     ]
+
+
+@router.patch(
+    "/{conversation_id}",
+    response_model=ConversationResponse,
+    summary="Rename a conversation",
+)
+async def rename_conversation(
+    conversation_id: str,
+    payload: RenameConversationRequest,
+    context: AuthContextDep,
+    repository: ConversationRepositoryDep,
+) -> ConversationResponse:
+    conversation = await repository.rename(
+        context=context, conversation_id=conversation_id, title=payload.title
+    )
+    return ConversationResponse(
+        id=conversation.id,
+        title=conversation.title,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+    )
+
+
+@router.delete(
+    "/{conversation_id}",
+    status_code=204,
+    response_class=Response,
+    summary="Delete a conversation and its messages",
+)
+async def delete_conversation(
+    conversation_id: str,
+    context: AuthContextDep,
+    repository: ConversationRepositoryDep,
+) -> Response:
+    await repository.delete(context=context, conversation_id=conversation_id)
+    return Response(status_code=204)
 
 
 @router.get(
@@ -157,7 +218,9 @@ async def send_message(
     llm: LLMPortDep,
     tools: ToolRegistryDep,
     executor: ToolExecutorDep,
+    limiter: RateLimiterDep,
 ) -> SendMessageResponse:
+    _enforce_rate_limit(limiter, context)
     service = ChatService(repository=repository, llm=llm, tools=tools, executor=executor)
     result = await service.send_message(
         context=context,
@@ -249,7 +312,10 @@ async def stream_message(
     llm: LLMPortDep,
     tools: ToolRegistryDep,
     executor: ToolExecutorDep,
+    limiter: RateLimiterDep,
 ) -> StreamingResponse:
+    _enforce_rate_limit(limiter, context)
+
     # Resolve before streaming: an unknown or foreign conversation must be a 404 status,
     # not an error event inside a 200 response.
     await repository.get(context=context, conversation_id=conversation_id)

@@ -1,34 +1,17 @@
-/* Phase 0 shell styles. No external fonts: the product should look the same
-   offline as it does deployed, and system fonts render Persian correctly. */
+/* Global sheet: tokens, base typography, utilities, and the Phase-0 page rules.
+ *
+ * Load order matters, so this file is imported first (see main.tsx): the token
+ * layer must exist before auth.css or chat.css resolve a single custom property.
+ */
 
-:root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --border: #e3e6eb;
-  --text: #14181f;
-  --muted: #5b6472;
-  --accent: #1f5eff;
-  --ok: #10814b;
-  --warn: #b23c17;
-  --radius: 12px;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1216;
-    --surface: #161b22;
-    --border: #262d38;
-    --text: #e8ecf2;
-    --muted: #9aa4b2;
-    --accent: #7aa2ff;
-    --ok: #4ade80;
-    --warn: #ff8a65;
-  }
-}
+@import "./styles/tokens.css";
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -36,16 +19,63 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Tahoma,
-    "Noto Sans",
-    sans-serif;
-  line-height: 1.6;
+  font-family: var(--font-sans);
+  /* 15px is the smallest size that keeps Persian diacritics and dots legible
+     without the page reading like a form. 1.75 is the line height Persian
+     script needs: ascenders and descenders touch below ~1.6. */
+  font-size: 15px;
+  line-height: 1.75;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
+
+#root {
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- utilities ---------- */
+
+/* Visually hidden, still announced: used for icon-only buttons' labels and for
+   status lines that would otherwise be read twice. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Identifiers, emails, tool names: LTR and isolated so a Latin string inside
+   RTL text does not drag the surrounding punctuation to the wrong side. */
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ---------- page rules (config notice / health) ---------- */
 
 .page {
   max-width: 780px;
@@ -128,12 +158,6 @@ body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dot--pending {
-    animation: none;
-  }
-}
-
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -145,7 +169,7 @@ body {
   font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--text-subtle);
 }
 
 .facts dd {
@@ -172,7 +196,7 @@ body {
   font: inherit;
   font-size: 0.9rem;
   padding: 7px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -182,11 +206,6 @@ body {
 .button:hover {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 .panel h2 {
@@ -199,7 +218,7 @@ body {
   font-size: 0.86rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--text-subtle);
 }
 
 .columns {
@@ -228,10 +247,28 @@ body {
   flex-wrap: wrap;
   gap: 8px 16px;
   font-size: 0.82rem;
-  color: var(--muted);
+  color: var(--text-subtle);
 }
 
-code {
-  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
   font-size: 0.86em;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ---------- motion guard ----------
+   One global rule instead of a per-component opt-out, so any animation added
+   later is covered without remembering to come back here. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

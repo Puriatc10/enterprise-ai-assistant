@@ -35,6 +35,7 @@ from app.infrastructure.connectors.sqlite.support import SqliteSupportConnector
 from app.infrastructure.llm.litellm_adapter import LiteLLMAdapter
 from app.infrastructure.persistence.supabase import SupabaseConversationRepository
 from app.security.auth import require_auth_context
+from app.security.rate_limit import TurnRateLimiter
 from app.security.tokens import JwksCache, SupabaseTokenVerifier, TokenVerifierConfig
 
 logger = logging.getLogger(__name__)
@@ -299,3 +300,19 @@ def get_tool_executor(request: Request) -> ToolExecutor:
 #: Annotated dependency types for handlers.
 ToolRegistryDep = Annotated[ToolRegistry, Depends(get_tool_registry)]
 ToolExecutorDep = Annotated[ToolExecutor, Depends(get_tool_executor)]
+
+
+def get_rate_limiter(request: Request) -> TurnRateLimiter:
+    """The process-wide limiter.
+
+    Built at startup so every request shares one window; the fallback keeps scripts and
+    tests working when they construct an app without the lifespan.
+    """
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if limiter is None:
+        limiter = TurnRateLimiter(limit=get_settings().rate_limit_turns_per_hour)
+        request.app.state.rate_limiter = limiter
+    return limiter
+
+
+RateLimiterDep = Annotated[TurnRateLimiter, Depends(get_rate_limiter)]

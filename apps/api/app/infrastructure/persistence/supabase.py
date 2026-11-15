@@ -153,14 +153,56 @@ class SupabaseConversationRepository:
             raise ConversationNotFoundError(conversation_id)
         return _to_conversation(rows[0])
 
-    async def list_recent(self, *, context: AuthContext, limit: int = 20) -> list[Conversation]:
+    async def list_recent(
+        self,
+        *,
+        context: AuthContext,
+        limit: int = 20,
+        before: datetime | None = None,
+    ) -> list[Conversation]:
         del context
         params = {"select": "*", "order": "updated_at.desc", "limit": str(limit)}
+        if before is not None:
+            # Keyset, not offset: a conversation updated mid-scroll must not shift the page.
+            params["updated_at"] = f"lt.{before.isoformat()}"
         async with self._session() as client:
             response = await client.get(
                 self._url("conversations"), params=params, headers=self._headers()
             )
         return [_to_conversation(row) for row in self._rows(response)]
+
+    async def rename(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        title: str,
+    ) -> Conversation:
+        del context  # RLS scopes the update to the caller's rows
+        async with self._session() as client:
+            response = await client.patch(
+                self._url("conversations"),
+                params={"id": f"eq.{conversation_id}", "select": "*"},
+                json={"title": title},
+                headers=self._headers(prefer="return=representation"),
+            )
+        rows = self._rows(response)
+        if not rows:
+            # A rename that matched no row is "not yours" or "not there" — the caller must
+            # not be able to tell which.
+            raise ConversationNotFoundError("No such conversation.")
+        return _to_conversation(rows[0])
+
+    async def delete(self, *, context: AuthContext, conversation_id: str) -> None:
+        del context  # RLS scopes the delete to the caller's rows
+        async with self._session() as client:
+            response = await client.delete(
+                self._url("conversations"),
+                params={"id": f"eq.{conversation_id}", "select": "id"},
+                headers=self._headers(prefer="return=representation"),
+            )
+        if not self._rows(response):
+            raise ConversationNotFoundError("No such conversation.")
 
     async def append_message(
         self,

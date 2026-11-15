@@ -20,6 +20,7 @@ Status choices are deliberate, and each one means something different to the cal
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -38,6 +39,7 @@ from app.domain.interfaces.llm import (
     LLMUnavailableError,
 )
 from app.domain.interfaces.repository import ConversationNotFoundError, RepositoryError
+from app.security.rate_limit import RateLimitExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,31 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+
+
+class TimingMiddleware(BaseHTTPMiddleware):
+    """Attach `X-Response-Time` and log one line per request.
+
+    The line carries the request id, so a user's screenshot resolves to a log entry that
+    also says how long the backend took — the first question when someone reports "it
+    hung". For a streaming response this measures time-to-headers, not the whole stream;
+    the stream's own events are what describe the rest.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        started = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        response.headers["X-Response-Time"] = f"{elapsed_ms}ms"
+        logger.info(
+            "request method=%s path=%s status=%d duration_ms=%d request_id=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+            _request_id(request),
+        )
         return response
 
 
@@ -145,6 +172,18 @@ def install_error_handlers(application: FastAPI) -> None:
             code="storage_error",
             message="Storage is unavailable right now.",
             request=request,
+        )
+
+    @application.exception_handler(RateLimitExceeded)
+    async def _rate_limited(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        # Retry-After is the only actionable part of a 429; the body stays in the same
+        # envelope so the client has one error shape to parse.
+        return _envelope(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            code="rate_limited",
+            message="Too many questions in a short time. Please wait a moment.",
+            request=request,
+            headers={"Retry-After": str(exc.retry_after_seconds)},
         )
 
     @application.exception_handler(LLMError)

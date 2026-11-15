@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     postgres_row_limit: int = 50
     postgres_statement_timeout_ms: int = 5_000
 
+    # -- cost control -----------------------------------------------------
+    # Turns allowed per subject per window. 0 disables the limiter (tests, offline runs).
+    rate_limit_turns_per_hour: int = 20
+
     # -- support tickets (SQLite, read-only file) — ADR-0008 -----------------
     # "sqlite" reads a seeded file; "mock" generates in-memory; "disabled" omits the
     # domain entirely. The file is created by scripts/seed_support_sqlite.py, never by
@@ -139,6 +143,15 @@ class Settings(BaseSettings):
         # at boot rather than at the first query.
         if not 1 <= value <= 100:
             msg = "postgres_row_limit must be between 1 and 100"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("rate_limit_turns_per_hour")
+    @classmethod
+    def _bounded_rate_limit(cls, value: int) -> int:
+        # 0 means "no limit" on purpose: offline runs and tests must not need a quota.
+        if not 0 <= value <= 1000:
+            msg = "rate_limit_turns_per_hour must be between 0 and 1000"
             raise ValueError(msg)
         return value
 

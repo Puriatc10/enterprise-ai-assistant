@@ -18,6 +18,7 @@ Adapters must implement the same guarantees:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from app.domain.models.auth import AuthContext
@@ -52,8 +53,40 @@ class ConversationRepository(Protocol):
         """
         ...
 
-    async def list_recent(self, *, context: AuthContext, limit: int = 20) -> list[Conversation]:
-        """The caller's conversations, most recently updated first."""
+    async def list_recent(
+        self,
+        *,
+        context: AuthContext,
+        limit: int = 20,
+        before: datetime | None = None,
+    ) -> list[Conversation]:
+        """The caller's conversations, most recently updated first.
+
+        ``before`` is a keyset cursor on ``updated_at``: pagination by offset would skip
+        or repeat conversations as soon as someone sends a message mid-scroll.
+        """
+        ...
+
+    async def rename(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        title: str,
+    ) -> Conversation:
+        """Replace a conversation's title with the caller's own choice.
+
+        Raises:
+            ConversationNotFoundError: unknown id, or owned by another caller.
+        """
+        ...
+
+    async def delete(self, *, context: AuthContext, conversation_id: str) -> None:
+        """Delete a conversation the caller owns, and its messages.
+
+        Raises:
+            ConversationNotFoundError: unknown id, or owned by another caller.
+        """
         ...
 
     async def append_message(

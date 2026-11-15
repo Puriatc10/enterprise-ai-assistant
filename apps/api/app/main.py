@@ -18,13 +18,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.errors import RequestIDMiddleware, install_error_handlers
+from app.api.errors import RequestIDMiddleware, TimingMiddleware, install_error_handlers
 from app.api.router import api_router
 from app.api.routes.health import SERVICE_NAME
 from app.application.tools.executor import ToolExecutor
 from app.core.config import Settings, get_settings
 from app.core.dependencies import build_token_verifier, build_tool_registry
 from app.core.logging import configure_logging
+from app.security.rate_limit import TurnRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     setup = build_tool_registry(settings)
     application.state.tool_registry = setup.registry
     application.state.tool_executor = ToolExecutor(registry=setup.registry)
+    application.state.rate_limiter = TurnRateLimiter(limit=settings.rate_limit_turns_per_hour)
 
     logger.info(
         "startup service=%s env=%s version=%s llm_provider=%s llm_model=%s "
@@ -96,6 +98,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     # Order matters: request id first so error responses can echo it.
     application.add_middleware(RequestIDMiddleware)
+    # Added after the id middleware so the access log can read the id it minted.
+    application.add_middleware(TimingMiddleware)
 
     install_error_handlers(application)
 

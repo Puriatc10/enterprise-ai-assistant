@@ -152,6 +152,19 @@ class InMemoryConversationRepository:
             for row in rows[:limit]
         ]
 
+    async def set_title_if_absent(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        title: str,
+    ) -> None:
+        row = self._owned(context, conversation_id)
+        if row.title:
+            return
+        row.title = title
+        row.updated_at = self._clock()
+
     async def record_tool_invocation(
         self,
         *,

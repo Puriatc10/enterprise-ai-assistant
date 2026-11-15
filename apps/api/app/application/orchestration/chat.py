@@ -135,6 +135,11 @@ class ChatService:
             message=ChatMessage(role="user", content=text),
         )
 
+        # Name the thread from its first message. A title the user set is never
+        # overwritten, and a naming failure is cosmetic: it must not cost the answer.
+        if conversation.title is None:
+            await self._name_conversation(context, conversation.id, message)
+
         history = await self._repository.list_messages(
             context=context,
             conversation_id=conversation.id,
@@ -215,6 +220,27 @@ class ChatService:
             usage=usage,
             tools_used=tuple(tool_usage),
         )
+
+    async def _name_conversation(
+        self,
+        context: AuthContext,
+        conversation_id: str,
+        text: str,
+    ) -> None:
+        """Derive a title from the first message, once.
+
+        The sidebar is the only place a title is visible, so failing to set one is a
+        cosmetic loss — logged, never raised.
+        """
+        title = _title_from(text)
+        if not title:
+            return
+        try:
+            await self._repository.set_title_if_absent(
+                context=context, conversation_id=conversation_id, title=title
+            )
+        except Exception:  # noqa: BLE001 - see docstring
+            logger.warning("could not name conversation %s", conversation_id, exc_info=True)
 
     async def _record_audit(
         self,

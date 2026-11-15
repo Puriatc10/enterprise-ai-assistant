@@ -80,6 +80,20 @@ class ConversationRepository(Protocol):
         """The conversation's turns in chronological order."""
         ...
 
+    async def set_title_if_absent(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        title: str,
+    ) -> None:
+        """Name a conversation from its first message.
+
+        Deliberately "if absent": a title the user chose is theirs, and a derived one
+        must never overwrite it. Implementations must scope the write to the caller.
+        """
+        ...
+
     async def record_tool_invocation(
         self,
         *,

@@ -184,17 +184,26 @@ login → answer → reload journey has not been walked end to end.
 
 ---
 
-## Phase 6 — Testing, Deployment, Demonstration
+## Phase 6 — Testing, Deployment, Demonstration ✅
 
-- Unit and integration suites; end-to-end test of the primary journey.
-- Security test pass (authn/authz negatives, log hygiene, bundle secret scan).
-- Docker build validation for both images.
-- Render deployment: web service (Docker) + static site; environment variables set.
-- Public demonstration with **synthetic data only**, and a written statement of
-  free-tier limits (cold start, ephemeral storage).
+- ✅ Unit and integration suites; **journey test** over HTTP: log in, ask, get a grounded
+  answer with its tool provenance, reload the conversation, and be refused if it is not
+  yours (`tests/test_journey.py`). Frontend unit tests with Vitest
+  (`src/services/api.test.ts`, `src/features/chat/useChat.test.tsx`).
+- ✅ Security pass: unknown tool, insufficient scope, smuggled identity field, timeout,
+  handler crash, foreign policy id, cross-tenant conversation read (all 404, not 403 — no
+  existence oracle), bundle credential scan (`scripts/check_bundle_secrets.py`).
+- ✅ Docker build validation for both images, in CI, including booting the API with no
+  credentials and asserting `/health`.
+- ✅ Deployment prepared: `render.yaml` (Docker web service + static site), with
+  `docs/development/DEPLOYMENT.md` and ADR-0007. **Not deployed** — no Render account was
+  used from this environment, and deploying is the owner's decision.
+- ✅ Demonstration script with pre-checks and failure modes (`docs/DEMO.md`); synthetic data
+  only, with the free-tier limits written down rather than worked around.
 
-Exit criteria: a public URL answers the demonstration question reliably enough to show,
-with no real customer data reachable.
+Exit criteria **partially** met: everything is ready for a public URL, and the only thing
+between this repository and a demonstration is applying the blueprint and a confirmed test
+user. Until that URL exists, the claim "publicly demonstrable" is prepared, not proven.
 
 ---
 

@@ -208,6 +208,26 @@ class SupabaseConversationRepository:
             )
         return [_to_message(row) for row in self._rows(response)]
 
+    async def set_title_if_absent(
+        self,
+        *,
+        context: AuthContext,
+        conversation_id: str,
+        title: str,
+    ) -> None:
+        # `title=is.null` is the PostgREST filter, not a Python default: the row is
+        # only touched while it is still unnamed. RLS (conversations_update_own) and
+        # the updated_at trigger do the rest.
+        params = {"id": f"eq.{conversation_id}", "title": "is.null"}
+        async with self._session() as client:
+            response = await client.patch(
+                self._url("conversations"),
+                params=params,
+                json={"title": title},
+                headers=self._headers(prefer="return=minimal"),
+            )
+        self._raise_for_status(response)
+
     async def record_tool_invocation(
         self,
         *,

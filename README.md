@@ -6,11 +6,10 @@ A web-based enterprise assistant that answers natural-language questions about d
 spread across multiple organizational systems — by calling narrowly scoped, read-only
 tools and composing the answer from what those tools actually returned.
 
-> **Status: Phase 5 — the chat interface works.** Log in with Supabase, ask a question in
-> Persian, and the answer arrives grounded in tool results, with the tools and their
-> outcomes shown beneath it. Conversations persist and reload. Authentication and
-> conversation storage are wired to Supabase; the data behind the tools is synthetic
-> (ADR-0002). Not production-ready, and not yet deployed.
+> **Status: Phase 6 — tested, deployable, demonstrable.** The primary journey is covered by
+> an HTTP-level test (sign in → ask → grounded answer with tool provenance → reload), the
+> browser client has unit tests, and `render.yaml` describes a two-service deployment with
+> the free tier's limits written down. Not yet deployed, and not production-ready.
 
 ---
 
@@ -54,7 +53,7 @@ authorized server-side before any connector runs.
 | Multiple read-only data connectors | mock (demo), PostgreSQL (CI-verified), REST (allowlisted) |
 | Supabase auth + persistence | JWT verification + RLS-scoped repository |
 | Docker-based dev environment | working |
-| Python packaging & tests | 165 unit tests locally; 5 PostgreSQL integration tests run in CI |
+| Python packaging & tests | 172 backend tests (5 PostgreSQL integration in CI) + 11 client tests |
 
 Deliberately **out of scope for the MVP**: write operations against external systems,
 CRUD on customer data, connector management UI, dynamic connector configuration,
@@ -226,6 +225,7 @@ the application database is logically separate from connector data sources.
 | Format | `cd apps/api && uv run ruff format .` |
 | Frontend dev | `cd apps/web && npm run dev` |
 | Frontend typecheck | `cd apps/web && npm run typecheck` |
+| Frontend unit tests | `cd apps/web && npm test` |
 | Frontend build | `cd apps/web && npm run build` |
 | Whole stack | `docker compose up --build` |
 | Tool-calling spike (needs `OPENROUTER_API_KEY`) | `cd apps/api && uv sync --extra llm && uv run --extra llm python scripts/phase1_spike.py` |
@@ -258,6 +258,9 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/decisions/ADR-0004-tool-execution.md`](docs/decisions/ADR-0004-tool-execution.md) | the tool execution model: allowlist, refusals as data, identity from context |
 | [`docs/decisions/ADR-0005-connector-model.md`](docs/decisions/ADR-0005-connector-model.md) | one connector contract; read-only enforced twice; projection owned by the domain |
 | [`docs/decisions/ADR-0006-browser-auth.md`](docs/decisions/ADR-0006-browser-auth.md) | browser auth, the error envelope, and why the turn reports `tools_used` |
+| [`docs/decisions/ADR-0007-deployment.md`](docs/decisions/ADR-0007-deployment.md) | Render topology, the free tier accepted on purpose, CORS as an exact origin |
+| [`docs/development/DEPLOYMENT.md`](docs/development/DEPLOYMENT.md) | how to deploy, and what the free tier costs in behaviour |
+| [`docs/DEMO.md`](docs/DEMO.md) | the five-minute walkthrough, with its failure modes |
 | [`docs/analysis/PHASE1-DIDAR24.md`](docs/analysis/PHASE1-DIDAR24.md) | Phase 1 evidence: what Didar24 exposes, and what it does not |
 | [`docs/analysis/PHASE1-LLM.md`](docs/analysis/PHASE1-LLM.md) | Phase 1 evidence: measured tool-calling results, and the adapter rules they imply |
 | [`docs/development/DEVELOPMENT.md`](docs/development/DEVELOPMENT.md) | environment details, ports, troubleshooting |

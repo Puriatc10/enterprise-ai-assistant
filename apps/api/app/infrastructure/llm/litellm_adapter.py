@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,7 +37,13 @@ from app.domain.interfaces.llm import (
     LLMTimeoutError,
     LLMUnavailableError,
 )
-from app.domain.models.conversation import ChatMessage, LLMRequest, LLMResponse, Usage
+from app.domain.models.conversation import (
+    ChatMessage,
+    LLMRequest,
+    LLMResponse,
+    LLMStreamChunk,
+    Usage,
+)
 from app.domain.models.tools import ToolCall, ToolSpec
 
 logger = logging.getLogger(__name__)
@@ -118,6 +124,111 @@ class LiteLLMAdapter:
 
         # Unreachable: the loop either returns or raises.
         raise LLMError("LLM call did not complete")
+
+    # -- streaming --------------------------------------------------------
+    async def stream(self, request: LLMRequest) -> AsyncIterator[LLMStreamChunk]:
+        """Stream one completion as deltas, then the assembled response.
+
+        Retries are only attempted **before the first delta**: once the user has seen
+        text, asking again would duplicate it on screen. A mid-stream failure surfaces
+        as the classified error and the caller decides what to show.
+        """
+        payload = self._build_payload(request)
+        payload["stream"] = True
+        payload["stream_options"] = {"include_usage": True}
+
+        for attempt in range(1, self._retry.max_attempts + 1):
+            emitted = False
+            try:
+                async for chunk in self._stream_once(payload):
+                    if chunk.text:
+                        emitted = True
+                    yield chunk
+                return
+            except Exception as exc:
+                error = classify_error(exc)
+                if emitted or not error.retryable or attempt == self._retry.max_attempts:
+                    raise error from exc
+
+                delay = self._retry.delay_for(attempt)
+                logger.warning(
+                    "llm stream attempt %d/%d failed (%s); retrying in %.2fs",
+                    attempt,
+                    self._retry.max_attempts,
+                    error.__class__.__name__,
+                    delay,
+                )
+                await self._sleep(delay)
+
+    async def _stream_once(self, payload: dict[str, Any]) -> AsyncIterator[LLMStreamChunk]:
+        """One streaming attempt: text deltas, then the assembled message.
+
+        Tool calls arrive as fragments spread across chunks (an id, a name, then JSON
+        pieces), so they are accumulated by index and parsed once at the end — the same
+        representation a non-streaming call returns.
+        """
+        raw_stream = await self._completion(**payload)
+
+        parts: list[str] = []
+        fragments: dict[int, dict[str, str]] = {}
+        usage: Usage | None = None
+        model_name = self._model
+        finish_reason: str | None = None
+
+        async for chunk in raw_stream:
+            model_name = getattr(chunk, "model", None) or model_name
+            usage = self._to_usage(getattr(chunk, "usage", None)) or usage
+
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            choice = choices[0]
+            finish_reason = getattr(choice, "finish_reason", None) or finish_reason
+
+            delta = getattr(choice, "delta", None)
+            if delta is None:
+                continue
+
+            text = getattr(delta, "content", None)
+            if text:
+                parts.append(text)
+                yield LLMStreamChunk(text=text)
+
+            for fragment in getattr(delta, "tool_calls", None) or []:
+                index = getattr(fragment, "index", 0) or 0
+                slot = fragments.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                fragment_id = getattr(fragment, "id", None)
+                if fragment_id:
+                    slot["id"] = fragment_id
+                function = getattr(fragment, "function", None)
+                if function is not None:
+                    name = getattr(function, "name", None)
+                    if name:
+                        slot["name"] = name
+                    arguments = getattr(function, "arguments", None)
+                    if arguments:
+                        slot["arguments"] += arguments
+
+        tool_calls = tuple(
+            ToolCall(
+                id=slot["id"] or f"call-{index}",
+                name=slot["name"],
+                arguments=_parse_arguments(slot["arguments"]),
+            )
+            for index, slot in sorted(fragments.items())
+            if slot["name"]
+        )
+
+        yield LLMStreamChunk(
+            response=LLMResponse(
+                message=ChatMessage(
+                    role="assistant", content="".join(parts), tool_calls=tool_calls
+                ),
+                model=model_name,
+                usage=usage,
+                finish_reason=finish_reason,
+            )
+        )
 
     # -- request mapping --------------------------------------------------
     def _build_payload(self, request: LLMRequest) -> dict[str, Any]:

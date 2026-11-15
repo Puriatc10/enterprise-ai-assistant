@@ -9,13 +9,16 @@ prompt logic. When a dependency refuses (501/401) the request never reaches here
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.application.orchestration.chat import ChatService
+from app.application.orchestration.chat import ChatService, EmptyAnswerError
 from app.core.dependencies import (
     AuthContextDep,
     ConversationRepositoryDep,
@@ -23,7 +26,15 @@ from app.core.dependencies import (
     ToolExecutorDep,
     ToolRegistryDep,
 )
-from app.domain.models.conversation import Usage
+from app.domain.interfaces.llm import (
+    LLMAuthError,
+    LLMError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
+from app.domain.models.conversation import StreamEvent, StreamEventKind, Usage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["chat"])
 
@@ -163,3 +174,100 @@ async def send_message(
             for item in result.tools_used
         ],
     )
+
+
+# -- streaming -------------------------------------------------------------
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    # Render and most reverse proxies buffer responses by default, which would deliver
+    # the whole answer at once and defeat the point.
+    "X-Accel-Buffering": "no",
+}
+
+
+def _sse(event: StreamEvent) -> str:
+    """One server-sent event: a named type plus a JSON payload."""
+    return f"event: {event.kind.value}\ndata: {event.model_dump_json(exclude_none=True)}\n\n"
+
+
+def _error_event(exc: Exception) -> StreamEvent:
+    """Map a failure onto the same codes the HTTP handlers use.
+
+    Once the first byte of a stream is sent the status line is fixed, so failures have
+    to travel as data. Same taxonomy as `api/errors.py`, so a client has one set of
+    codes to translate either way.
+    """
+    if isinstance(exc, LLMRateLimitError):
+        return StreamEvent(
+            kind=StreamEventKind.ERROR,
+            code="llm_rate_limited",
+            message="مدل در حال حاضر پاسخ‌گو نیست؛ چند لحظه بعد دوباره تلاش کنید.",
+        )
+    if isinstance(exc, LLMTimeoutError):
+        return StreamEvent(
+            kind=StreamEventKind.ERROR,
+            code="llm_timeout",
+            message="پاسخ مدل در زمان مجاز نرسید؛ دوباره تلاش کنید.",
+        )
+    if isinstance(exc, LLMAuthError):
+        return StreamEvent(
+            kind=StreamEventKind.ERROR,
+            code="llm_not_configured",
+            message="سرویس مدل پیکربندی نشده است.",
+        )
+    if isinstance(exc, EmptyAnswerError):
+        return StreamEvent(
+            kind=StreamEventKind.ERROR,
+            code="empty_answer",
+            message="پاسخی از مدل دریافت نشد.",
+        )
+    if isinstance(exc, LLMError):
+        return StreamEvent(
+            kind=StreamEventKind.ERROR,
+            code="llm_error",
+            message="خطا در ارتباط با مدل.",
+        )
+    return StreamEvent(
+        kind=StreamEventKind.ERROR,
+        code="internal_error",
+        message="خطای غیرمنتظره رخ داد.",
+    )
+
+
+@router.post(
+    "/{conversation_id}/messages/stream",
+    summary="Send a message and stream the answer",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+async def stream_message(
+    conversation_id: str,
+    payload: SendMessageRequest,
+    context: AuthContextDep,
+    repository: ConversationRepositoryDep,
+    llm: LLMPortDep,
+    tools: ToolRegistryDep,
+    executor: ToolExecutorDep,
+) -> StreamingResponse:
+    # Resolve before streaming: an unknown or foreign conversation must be a 404 status,
+    # not an error event inside a 200 response.
+    await repository.get(context=context, conversation_id=conversation_id)
+
+    service = ChatService(repository=repository, llm=llm, tools=tools, executor=executor)
+
+    async def events() -> AsyncIterator[str]:
+        try:
+            async for event in service.stream_message(
+                context=context,
+                message=payload.content,
+                conversation_id=conversation_id,
+            ):
+                yield _sse(event)
+        except Exception as exc:  # noqa: BLE001 - the status line is already sent
+            logger.warning(
+                "stream failed conversation=%s error=%s", conversation_id, type(exc).__name__
+            )
+            yield _sse(_error_event(exc))
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers=_SSE_HEADERS)

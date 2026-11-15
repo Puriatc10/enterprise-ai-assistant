@@ -11,9 +11,10 @@ fake adapter for tests).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Protocol, runtime_checkable
 
-from app.domain.models.conversation import LLMRequest, LLMResponse
+from app.domain.models.conversation import LLMRequest, LLMResponse, LLMStreamChunk
 
 
 class LLMError(Exception):
@@ -85,5 +86,21 @@ class LLMPort(Protocol):
             LLMTimeoutError: the provider exceeded the timeout.
             LLMRateLimitError: quota or rate limit reached.
             LLMInvalidResponseError: the response could not be normalized.
+        """
+        ...
+
+    def stream(self, request: LLMRequest) -> AsyncIterator[LLMStreamChunk]:
+        """Stream one completion as deltas, ending with the assembled response.
+
+        Implementations must:
+        * yield text deltas as they arrive (that is the whole point),
+        * yield a final chunk whose ``response`` carries content, tool calls, model and
+          usage — the caller must not need a second request to learn what happened,
+        * only retry before the first delta has been emitted; retrying mid-stream would
+          duplicate text the user has already seen,
+        * translate provider errors into ``LLMError`` subclasses.
+
+        Raises:
+            LLMTimeoutError, LLMRateLimitError, LLMInvalidResponseError as above.
         """
         ...

@@ -8,6 +8,7 @@ directions, so nothing above ``infrastructure/llm`` sees a vendor payload.
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -58,6 +59,44 @@ class LLMRequest(BaseModel):
     #: adapter maps or drops it per provider.
     temperature: float | None = None
     max_tokens: int | None = None
+
+
+class LLMStreamChunk(BaseModel):
+    """One increment of a streaming completion.
+
+    ``text`` is a delta to append. ``response`` is set exactly once, on the final
+    chunk, carrying the same shape a non-streaming call returns — so the tool loop can
+    decide what comes next without issuing a second request.
+    """
+
+    text: str = ""
+    response: LLMResponse | None = None
+
+
+class StreamEventKind(StrEnum):
+    """What the browser is told while a turn is in flight."""
+
+    TOKEN = "token"
+    TOOL = "tool"
+    DONE = "done"
+    ERROR = "error"
+
+
+class StreamEvent(BaseModel):
+    """A server-sent event for a streaming turn.
+
+    Deliberately narrow: text, one tool outcome, the finished answer, or an error. The
+    client renders exactly these and invents nothing, which is why ``done.answer`` is
+    authoritative even though the client already has the tokens.
+    """
+
+    kind: StreamEventKind
+    text: str | None = None
+    tool: ToolUsage | None = None
+    answer: str | None = None
+    conversation_id: str | None = None
+    message: str | None = None
+    code: str | None = None
 
 
 class ToolUsage(BaseModel):

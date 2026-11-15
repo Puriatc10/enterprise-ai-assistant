@@ -13,10 +13,15 @@ It is deliberately dumb: no heuristics, no pretending to be a model.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 
 from app.domain.interfaces.llm import LLMError
-from app.domain.models.conversation import ChatMessage, LLMRequest, LLMResponse
+from app.domain.models.conversation import (
+    ChatMessage,
+    LLMRequest,
+    LLMResponse,
+    LLMStreamChunk,
+)
 
 
 class FakeLLMAdapter:
@@ -51,6 +56,19 @@ class FakeLLMAdapter:
         if isinstance(next_response, LLMError):
             raise next_response
         return next_response
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[LLMStreamChunk]:
+        """Stream a scripted response in small deltas.
+
+        Reuses ``complete()`` for the script bookkeeping, then slices the text — so a
+        streaming test asserts exactly what a non-streaming one would, plus the delta
+        boundaries.
+        """
+        response = await self.complete(request)
+        text = response.message.content
+        for start in range(0, len(text), 12):
+            yield LLMStreamChunk(text=text[start : start + 12])
+        yield LLMStreamChunk(response=response)
 
 
 class ScriptedLLM(FakeLLMAdapter):

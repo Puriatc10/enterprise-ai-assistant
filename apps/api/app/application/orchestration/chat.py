@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from app.application.tools.executor import ExecutionRecord, ToolExecutor, tool_message
@@ -25,7 +26,14 @@ from app.application.tools.registry import ToolRegistry
 from app.domain.interfaces.llm import LLMPort
 from app.domain.interfaces.repository import ConversationRepository
 from app.domain.models.auth import AuthContext
-from app.domain.models.conversation import ChatMessage, LLMRequest, ToolUsage, Usage
+from app.domain.models.conversation import (
+    ChatMessage,
+    LLMRequest,
+    StreamEvent,
+    StreamEventKind,
+    ToolUsage,
+    Usage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +227,119 @@ class ChatService:
             model=model_name,
             usage=usage,
             tools_used=tuple(tool_usage),
+        )
+
+    async def stream_message(
+        self,
+        *,
+        context: AuthContext,
+        message: str,
+        conversation_id: str | None = None,
+    ) -> AsyncIterator[StreamEvent]:
+        """Run one turn, yielding tokens as the provider produces them.
+
+        A separate path from ``send_message`` on purpose: a streaming caller needs
+        events and a non-streaming caller needs one object. Both use the same helpers,
+        so the security checks, the audit trail and the persistence rules cannot drift.
+
+        Text streamed during a round that ends in a tool call is *not* discarded — it is
+        what the model said before deciding it needed data — but the persisted answer is
+        the final round's text, never the concatenation of rounds.
+        """
+        text = message.strip()
+        if not text:
+            raise ValueError("Message must not be empty.")
+
+        if conversation_id is None:
+            conversation = await self._repository.create(
+                context=context, title=_title_from(text)
+            )
+        else:
+            conversation = await self._repository.get(
+                context=context, conversation_id=conversation_id
+            )
+
+        # Persist first, as in the non-streaming path.
+        await self._repository.append_message(
+            context=context,
+            conversation_id=conversation.id,
+            message=ChatMessage(role="user", content=text),
+        )
+        if conversation.title is None:
+            await self._name_conversation(context, conversation.id, text)
+
+        history = await self._repository.list_messages(
+            context=context,
+            conversation_id=conversation.id,
+            limit=self._history_limit,
+        )
+        messages: list[ChatMessage] = [
+            ChatMessage(role="system", content=SYSTEM_PROMPT),
+            *(stored.as_chat_message() for stored in history),
+        ]
+        offered_tools = self._tools.specs_for(context) if self._tools is not None else ()
+
+        answer = ""
+        for _ in range(self._max_tool_rounds):
+            streamed: list[str] = []
+            response = None
+
+            async for chunk in self._llm.stream(
+                LLMRequest(messages=tuple(messages), tools=offered_tools)
+            ):
+                if chunk.text:
+                    streamed.append(chunk.text)
+                    yield StreamEvent(kind=StreamEventKind.TOKEN, text=chunk.text)
+                if chunk.response is not None:
+                    response = chunk.response
+
+            if response is None:
+                raise EmptyAnswerError("The model streamed no response.")
+
+            if not response.message.tool_calls:
+                answer = (response.message.content or "".join(streamed)).strip()
+                break
+
+            if self._executor is None or not offered_tools:
+                logger.warning("model proposed tool calls but no tools are offered")
+                break
+
+            messages.append(response.message)
+            for call in response.message.tool_calls:
+                record = await self._executor.execute(call=call, context=context)
+                await self._record_audit(context, conversation.id, record)
+                usage = ToolUsage(
+                    tool=record.result.tool,
+                    status=record.result.status.value,
+                    latency_ms=record.latency_ms,
+                )
+                yield StreamEvent(kind=StreamEventKind.TOOL, tool=usage)
+                messages.append(
+                    ChatMessage(
+                        role="tool",
+                        content=json.dumps(tool_message(record), ensure_ascii=False),
+                        tool_call_id=call.id,
+                    )
+                )
+        else:
+            logger.warning("tool round limit reached rounds=%d", self._max_tool_rounds)
+            answer = PARTIAL_ANSWER_FALLBACK
+
+        if not answer:
+            raise EmptyAnswerError("The model returned an empty answer.")
+
+        # The answer is persisted exactly once, at the end: streaming it to the browser
+        # is a delivery detail, and a half-written assistant row would replay as garbage.
+        await self._repository.append_message(
+            context=context,
+            conversation_id=conversation.id,
+            message=ChatMessage(role="assistant", content=answer),
+        )
+
+        yield StreamEvent(
+            kind=StreamEventKind.DONE,
+            answer=answer,
+            conversation_id=conversation.id,
         )
 
     async def _name_conversation(

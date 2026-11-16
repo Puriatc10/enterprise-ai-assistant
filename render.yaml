@@ -42,7 +42,7 @@ services:
         sync: false
 
   - type: web
-    name: enterprise-ai-assistant-web
+    name: eaa-web
     runtime: static
     plan: free
     rootDir: apps/web

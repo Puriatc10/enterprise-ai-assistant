@@ -64,6 +64,42 @@ fixes that impression.
   Persian message and the UI says the service is busy. That is the designed behaviour, not
   an incident.
 
+## Live deployment (2026-11-16)
+
+| | URL |
+|---|---|
+| App | https://eaa-web-8bvb.onrender.com |
+| API | https://enterprise-ai-assistant-api-jmdj.onrender.com (`/health`, `/docs`) |
+| Render services | `enterprise-ai-assistant-api` (Docker, frankfurt, free) · `eaa-web` (static, free) |
+
+The `-jmdj` / `-8bvb` suffixes are Render's: the plain names were already taken, so it
+appended a unique part. Both are the canonical hostnames `API_CORS_ORIGINS` and
+`VITE_API_BASE_URL` point at.
+
+### Things only a live deployment showed
+
+1. **The image installed the base deps only.** `/health` reported `llm.configured: true`
+   because the key was set, and every real turn failed with `RuntimeError: … needs the
+   optional dependency`. The Dockerfile now installs `.[llm]`. CI never runs a turn against
+   the image, so it could not catch this.
+2. **The SQLite support database was missing.** The domain opens it read-only at startup
+   and never creates it, so the image seeds it at build time from the committed SQL.
+3. **Changing an environment variable does not restart a Docker service.** The new
+   `API_CORS_ORIGINS` sat in the dashboard while the container kept the old value and every
+   browser request failed as a "network" error. Render a redeploy after env changes.
+4. **The static-site API field is `publishPath`**, not `staticPublishPath` (which is the
+   YAML key). Creating the site through the API without it published `public`, an empty
+   directory, so the deploy "succeeded" and served nothing.
+
+### Known behaviour on the free plan
+
+- The API sleeps after 15 minutes idle; the next request pays a 30–60 s cold start. The
+  static site never sleeps.
+- Large JS bundles transfer slowly to some networks (measured 1–3 kB/s from Iran, against
+  ~1.2 MB/s from jsDelivr for the same size), so first load can take a while. Once the
+  bundle is cached, navigation is instant. This is a network path, not the artifact: the
+  same object downloads complete and byte-identical when the stream is allowed to finish.
+
 ## Not doing (yet)
 
 Kubernetes, microservices, a queue, or a separate proxy service. Each adds an operational

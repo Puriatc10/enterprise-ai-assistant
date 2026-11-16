@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Puriatc10/enterprise-ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/Puriatc10/enterprise-ai-assistant/actions/workflows/ci.yml)
 
-**فارسی:** [معرفی کامل محصول](docs/PRODUCT-OVERVIEW.fa.md) — مسئله، معماری، ابزارها، ویژگی‌های فعلی و چشم‌انداز.
+**فارسی:** [معرفی کامل محصول](docs/PRODUCT-OVERVIEW.fa.md) — مسئله، معماری، ابزارها، ویژگی‌های فعلی و چشم‌انداز · [نسخهٔ PDF](docs/PRODUCT-OVERVIEW.fa.pdf)
 
 A web-based enterprise assistant that answers natural-language questions about data
 spread across multiple organizational systems — by calling narrowly scoped, read-only

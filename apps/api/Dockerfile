@@ -15,11 +15,22 @@ WORKDIR /app
 COPY apps/api/pyproject.toml ./pyproject.toml
 COPY apps/api/app ./app
 
-RUN pip install --no-cache-dir .
+# `[llm]` is not optional in a deployment. Without it the container boots, `/health`
+# reports `llm.configured: true` because the key is present, and the first real turn dies
+# with "needs the optional dependency" — a 500 that only a live deployment shows.
+RUN pip install --no-cache-dir ".[llm]"
+
+# The support domain opens a SQLite file read-only at startup and never creates it, so the
+# image ships with the demo rows already seeded. Regenerating here (rather than copying a
+# .sqlite3 from the repository) keeps a single source of truth: the committed SQL.
+COPY apps/api/scripts ./scripts
+COPY apps/api/data/support_demo.sql ./data/support_demo.sql
+RUN python scripts/seed_support_sqlite.py --force
 
 # Run as a non-root user; the container keeps no writable state by design
 # (persistence is Supabase, logs go to stdout).
-RUN useradd --create-home --uid 10001 appuser
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app/data
 USER appuser
 
 EXPOSE 8000

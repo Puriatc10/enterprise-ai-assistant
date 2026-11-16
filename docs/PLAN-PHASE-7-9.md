@@ -1,5 +1,10 @@
 # Improvement Plan — Phases 7–9
 
+> **Delivered.** Every item in this plan was implemented and deployed on 2026-11-16;
+> the outcome is recorded in `PROJECT-REPORT.md` and `ROADMAP.md`. The numbers below
+> are the baseline the plan started from, not the current state.
+
+
 > **Status:** awaiting approval. Nothing below has been implemented.
 > **Scope:** turn a single-domain, single-source demonstration into a multi-source
 > assistant, and give it an interface that looks and feels like a product.

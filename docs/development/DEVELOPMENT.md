@@ -161,7 +161,7 @@ apply one.
 
 1. Open the dev project → **SQL Editor**.
 2. Paste `supabase/migrations/0001_init.sql` and run it. It is idempotent.
-3. Verify the policies exist (expect 12 rows across 3 tables):
+3. Verify the policies exist (expect 8 rows across 3 tables):
 
 ```sql
 select tablename, policyname, cmd

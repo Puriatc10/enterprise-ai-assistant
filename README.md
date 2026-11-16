@@ -2,15 +2,23 @@
 
 [![CI](https://github.com/Puriatc10/enterprise-ai-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/Puriatc10/enterprise-ai-assistant/actions/workflows/ci.yml)
 
+**فارسی:** [معرفی کامل محصول](docs/PRODUCT-OVERVIEW.fa.md) — مسئله، معماری، ابزارها، ویژگی‌های فعلی و چشم‌انداز.
+
 A web-based enterprise assistant that answers natural-language questions about data
 spread across multiple organizational systems — by calling narrowly scoped, read-only
 tools and composing the answer from what those tools actually returned.
 
-> **Status: Phases 7–9 complete — multi-source, streaming, hardened.** Three data domains
-> (insurance, support, CRM) behind one orchestrator, a Persian RTL interface with
-> token-based light/dark themes and SSE streaming, per-user rate limiting, and measured
-> tool routing (92 %). Deployment is prepared in `render.yaml` but **not applied**, and the
-> live Supabase row-level-security path is unverified without a confirmed user.
+> **Status: deployed and demonstrable — Phases 0–9 complete.**
+> App: <https://eaa-web-8bvb.onrender.com> · API: <https://enterprise-ai-assistant-api-jmdj.onrender.com> (`/health`, `/docs`)
+>
+> Three data domains (insurance, support, CRM) behind one orchestrator, a Persian RTL
+> interface with token-based light/dark themes and SSE streaming, model-written thread
+> titles, per-user rate limiting, and measured tool routing (92 %). Verified end to end in a
+> browser against the deployed API and the real Supabase row-level-security path.
+>
+> Free plan: the API sleeps after 15 minutes idle, so the first request of a session pays a
+> 30–60 s cold start. First load of the bundle can also be slow on some networks; it is
+> cached afterwards.
 
 ---
 
@@ -54,7 +62,7 @@ authorized server-side before any connector runs.
 | Multiple read-only data connectors | **3 domains / 8 tools** — insurance (mock), support (SQLite), CRM (PostgreSQL) |
 | Supabase auth + persistence | JWT verification + RLS-scoped repository |
 | Docker-based dev environment | working |
-| Python packaging & tests | 265 backend tests (10 PostgreSQL integration in CI) + 21 client tests |
+| Python packaging & tests | 283 backend tests (10 PostgreSQL integration in CI) + 26 client tests |
 
 Deliberately **out of scope for the MVP**: write operations against external systems,
 CRUD on customer data, connector management UI, dynamic connector configuration,
@@ -271,7 +279,8 @@ host (Docker Hub unreachable there); CI is where the container path is verified.
 | [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) | modules, data flow, tool-calling sequence, RAG positioning |
 | [`docs/architecture/TECH_STACK.md`](docs/architecture/TECH_STACK.md) | every technology: role, why, alternatives, limits |
 | [`docs/architecture/SECURITY.md`](docs/architecture/SECURITY.md) | authn/authz model, tenant isolation, LLM data privacy |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phases 0–6 plus future knowledge retrieval |
+| [`docs/PRODUCT-OVERVIEW.fa.md`](docs/PRODUCT-OVERVIEW.fa.md) | **معرفی کامل محصول به فارسی** — معماری، ابزارها، ویژگی‌ها و چشم‌انداز |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phases 0–9, what was cut, and the future knowledge-retrieval phase |
 | [`docs/decisions/ADR-0001-initial-architecture.md`](docs/decisions/ADR-0001-initial-architecture.md) | what was decided, and what is still provisional |
 | [`docs/decisions/ADR-0002-didar24-access-path.md`](docs/decisions/ADR-0002-didar24-access-path.md) | why the mock connector is the primary data path |
 | [`docs/decisions/ADR-0003-provider-selection.md`](docs/decisions/ADR-0003-provider-selection.md) | why the MVP runs on OpenRouter rather than Gemini |

@@ -3,7 +3,8 @@
 **Repository:** `Puriatc10/enterprise-ai-assistant` (private) · **Branch:** `main` · **HEAD:** `10570f2`
 **Window:** 2026-11-14 → 2026-11-16 · **30 commits** · **161 tracked files**
 **Size:** 11 829 lines of Python (87 files) · 3 729 lines of TypeScript/TSX (19 files) · 767 lines of CSS · 22 documents, 9 ADRs
-**Verification at HEAD:** 265 backend tests + 21 client tests passing · ruff lint and format clean · CI green on four jobs
+**Verification at HEAD:** 283 backend tests + 26 client tests passing · ruff lint and format clean · CI green on four jobs
+**Live:** app <https://eaa-web-8bvb.onrender.com> · API <https://enterprise-ai-assistant-api-jmdj.onrender.com> (deployed 2026-11-16)
 
 ---
 
@@ -26,7 +27,7 @@ proposal, which an executor either performs or refuses with a typed reason.
 | Auth | Supabase Auth; ES256 JWTs verified against JWKS; no shared secret stored |
 | Storage | Supabase Postgres with row-level security, queried with the caller's own token |
 | Cost control | 20 turns/hour per user, sliding window, 429 + `Retry-After` |
-| Deployment | `render.yaml` prepared; **not applied** |
+| Deployment | **live on Render** (free plan, Frankfurt) — <https://eaa-web-8bvb.onrender.com> |
 | Production readiness | **No** — see §8 |
 
 ---
@@ -171,9 +172,13 @@ audit row per tool call → answer persisted once.
 
 **Proven by execution:**
 
-- 265 backend tests; 10 PostgreSQL integration tests that run in CI against a real server.
-- 21 client tests, including a real SSE parser driven by split frames, CRLF, multi-line data
-  and a tail frame without a blank line.
+- 283 backend tests; 10 PostgreSQL integration tests that run in CI against a real server.
+- 26 client tests, including a real SSE parser driven by split frames, CRLF, multi-line data
+  and a tail frame without a blank line, and the sidebar's rename/delete interactions.
+- **The deployed stack, in a browser**: sign-in, a streamed answer with two tool calls, a
+  model-written thread title arriving as its own event, a rename that persisted, and a
+  reload that replayed the transcript — all through the public API and the real Supabase
+  row-level-security policies.
 - Journey test: create → ask → grounded answer with `tools_used` → reload → 404 for another
   user.
 - CI: four jobs (api, postgres, docker, web) green at `10570f2`; the API container boots with
@@ -186,14 +191,13 @@ audit row per tool call → answer persisted once.
 
 **Not proven:**
 
-- The full login → answer → reload journey in a browser, because the project requires email
-  confirmation and has no confirmed user (`mailer_autoconfirm: False`).
-- The live Supabase RLS path — repository tests use the in-memory adapter; the real adapter
-  needs a token from that confirmed user.
 - `supabase/migrations/0002_crm_demo.sql` against the live project; it was applied twice
-  against a throwaway `postgres:16` container and verified idempotent.
-- Any deployment: no public URL exists.
-- Docker image builds on this machine (Docker Hub is unreachable here); CI builds both.
+  against a throwaway `postgres:16` container and verified idempotent. The CRM domain is
+  wired but has no seeded data in production.
+- Docker image builds on this machine (Docker Hub is unreachable here); CI builds both, and
+  Render builds the image that is actually running.
+- The email-confirmation round trip from a phone: the link follows the browser now, but the
+  project's Site URL still says `localhost:3000` until the dashboard is updated.
 
 ---
 
@@ -228,13 +232,14 @@ audit row per tool call → answer persisted once.
 
 ## 8. Gaps and risks — the honest list
 
-1. **No deployment.** The blueprint exists; the demo does not. Everything else in this report
-   is a repository claim, not a live product claim.
-2. **No confirmed user**, so the authenticated end-to-end path and live RLS are unverified.
-   One Supabase toggle (or one user created in the dashboard) unblocks both.
-3. **CRM is prepared, not applied.** Its migration was exercised on a container, not on the
-   project. Seeding still binds one operator-supplied subject uuid; a real deployment needs a
-   subject→account mapping table.
+1. **Email confirmation still points at the project's Site URL** (`http://localhost:3000`)
+   until Site URL and Redirect URLs are set in the dashboard. Sign-in works; a *new* user's
+   confirmation link does not return to the deployed app.
+2. **CRM is live in code, empty in data.** Its migration was exercised on a container, not on
+   the project, and seeding binds one operator-supplied subject uuid. A real deployment needs
+   a subject→account mapping table.
+3. **The free tier sleeps.** First request after 15 minutes idle pays a 30–60 s cold start;
+   documented rather than hidden (`DEPLOYMENT.md`).
 4. **Insurance data is synthetic** and stays that way until Didar24 access exists (ADR-0002).
 5. **A SQLite query already running cannot be cancelled.** The progress handler bounds it; the
    docstring says so rather than implying a hard timeout.
@@ -270,9 +275,9 @@ UI names exactly which variable is missing.
 
 ## 10. What I would do next
 
-1. Apply `render.yaml` and walk `docs/DEMO.md` on the public URL — this converts the largest
-   unverified claim into a proven one.
-2. Create one confirmed demo user; then run the live RLS test and the CRM migration against the
-   project.
+1. Set Site URL and Redirect URLs in Supabase so a new user's confirmation link returns to
+   the deployed app — the last step of the redirect fix that lives in the dashboard.
+2. Apply `0002_crm_demo.sql` to the project and seed it, then the third domain stops being
+   the empty one.
 3. Only then consider knowledge retrieval (RAG) — it is gated on real documents and a paid or
    self-hosted model path, and it should arrive as more tools, not as a second brain.

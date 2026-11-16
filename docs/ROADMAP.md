@@ -180,14 +180,13 @@ login → answer → reload journey has not been walked end to end.
 - ✅ Docker build validation for both images, in CI, including booting the API with no
   credentials and asserting `/health`.
 - ✅ Deployment prepared: `render.yaml` (Docker web service + static site), with
-  `docs/development/DEPLOYMENT.md` and ADR-0007. **Not deployed** — no Render account was
-  used from this environment, and deploying is the owner's decision.
+  `docs/development/DEPLOYMENT.md` and ADR-0007. Deployed on 2026-11-16 (see Phase 9).
 - ✅ Demonstration script with pre-checks and failure modes (`docs/DEMO.md`); synthetic data
   only, with the free-tier limits written down rather than worked around.
 
-Exit criteria **partially** met: everything is ready for a public URL, and the only thing
-between this repository and a demonstration is applying the blueprint and a confirmed test
-user. Until that URL exists, the claim "publicly demonstrable" is prepared, not proven.
+Exit criteria **met** on 2026-11-16: the blueprint was applied and the demonstration was
+walked on the public URL — sign-in, a streaming answer with tool provenance, a generated
+thread title, a rename, and a reload that replayed the transcript from Supabase.
 
 ---
 
@@ -222,11 +221,11 @@ throwaway `postgres:16` container, because no administrative connection exists h
 - ✅ Sanitised markdown (`rehype-sanitize`, no raw HTML), copy and retry actions, an
   interrupted-answer label.
 - ✅ Checked by rendering the real component tree at 1280 px and at 900/420 px in both
-  themes: no horizontal overflow, composer and empty state aligned, 21 client tests green.
+  themes: no horizontal overflow, composer and empty state aligned, 26 client tests green.
 
 ---
 
-## Phase 9 — Hardening ✅ (deployment pending)
+## Phase 9 — Hardening ✅
 
 - ✅ Per-user sliding-window rate limit, `429` + `Retry-After`, checked before any provider
   work in both routes.
@@ -235,9 +234,13 @@ throwaway `postgres:16` container, because no administrative connection exists h
 - ✅ Bundle split: initial JS 649 kB → **448 kB (128.63 kB gzip)** with a lazy 202 kB chat
   chunk.
 - ✅ `X-Response-Time` plus one structured access log line carrying the request id.
-- ⏳ **Not done:** applying `render.yaml` and the live Supabase RLS test. Both need the
-  owner's Render account and a confirmed user; everything before that is prepared and
-  documented in `docs/development/DEPLOYMENT.md`.
+- ✅ **Deployed** on Render (free plan, Frankfurt): app <https://eaa-web-8bvb.onrender.com>,
+  API <https://enterprise-ai-assistant-api-jmdj.onrender.com>. The live Supabase RLS path was exercised by that deployment — every
+  conversation read and write went through the real JWT and the project's policies.
+- ✅ Model-written thread titles: one extra call per thread, sent as its own SSE event after
+  `done`, with the first message as the fallback (ADR-0009 §8).
+- ✅ Rename and delete from the sidebar, with the CORS preflight that had silently blocked
+  both from a browser fixed and covered by a test (ADR-0009 §10).
 
 ---
 

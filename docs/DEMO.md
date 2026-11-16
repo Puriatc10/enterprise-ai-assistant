@@ -1,7 +1,13 @@
 # Demonstration script
 
 Five minutes, one question, one answer that can be traced to a tool call. Everything below
-has been run in this repository; nothing is staged.
+has been run against the deployed instance; nothing is staged.
+
+| | |
+|---|---|
+| App | <https://eaa-web-8bvb.onrender.com> |
+| API | <https://enterprise-ai-assistant-api-jmdj.onrender.com> (`/health`, `/docs`) |
+| Repository | <https://github.com/Puriatc10/enterprise-ai-assistant> (private) |
 
 ## Before you start
 

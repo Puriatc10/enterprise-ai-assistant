@@ -65,16 +65,21 @@ def test_stream_emits_tokens_then_done_and_persists_once(streaming_client: tuple
 
     kinds = [event["kind"] for event in events]
     assert kinds.count("token") >= 2, "text must arrive in deltas"
-    assert kinds[-1] == "done"
+
+    # `done` settles the answer; a `title` event may follow it, because a conversation
+    # that was just created is named after its answer — never before it.
+    done = next(event for event in events if event["kind"] == "done")
+    assert kinds.index("done") > 0
+    assert all(kind == "title" for kind in kinds[kinds.index("done") + 1 :])
 
     streamed = "".join(event["text"] for event in events if event["kind"] == "token")
-    assert events[-1]["answer"] == "شما سه بیمه‌نامه دارید."
-    assert streamed == events[-1]["answer"]
+    assert done["answer"] == "شما سه بیمه‌نامه دارید."
+    assert streamed == done["answer"]
 
     # Persisted exactly once, and identical to what was shown.
     history = client.get(f"/conversations/{conversation_id}/messages").json()
     assert [message["role"] for message in history] == ["user", "assistant"]
-    assert history[1]["content"] == events[-1]["answer"]
+    assert history[1]["content"] == done["answer"]
 
 
 def test_stream_reports_the_tool_it_used(streaming_client: tuple) -> None:
@@ -98,7 +103,7 @@ def test_stream_reports_the_tool_it_used(streaming_client: tuple) -> None:
     assert len(tool_events) == 1
     assert tool_events[0]["tool"]["tool"] == "get_my_policy_count"
     assert tool_events[0]["tool"]["status"] == "ok"
-    assert events[-1]["kind"] == "done"
+    assert [e["kind"] for e in events if e["kind"] != "title"][-1] == "done"
 
 
 def test_stream_maps_a_rate_limit_to_an_error_event(streaming_client: tuple) -> None:

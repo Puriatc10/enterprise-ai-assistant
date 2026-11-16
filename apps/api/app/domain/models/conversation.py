@@ -79,6 +79,9 @@ class StreamEventKind(StrEnum):
     TOKEN = "token"
     TOOL = "tool"
     DONE = "done"
+    #: Sent after ``done`` when the turn named the conversation. The client keeps reading
+    #: the stream past ``done`` for exactly this event.
+    TITLE = "title"
     ERROR = "error"
 
 

@@ -432,6 +432,14 @@ export function useChat(token: string): UseChatResult {
               outcome.answer = finalAnswer;
               outcome.title = title;
             },
+            onTitle: (title) => {
+              // Arrives after the answer; the sidebar picks it up without a refetch.
+              if (targetId !== null) {
+                setConversations((prev) =>
+                  prev.map((item) => (item.id === targetId ? { ...item, title } : item)),
+                );
+              }
+            },
           },
           controller.signal,
         );

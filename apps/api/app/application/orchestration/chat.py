@@ -350,16 +350,23 @@ class ChatService:
             message=ChatMessage(role="assistant", content=answer),
         )
 
-        # Before ``done``: the client applies this to its own list, and a title written
-        # afterwards would appear only on the next page load.
-        title = await self._name_if_untitled(context, conversation, text)
-
+        # Settle the answer first, then name the thread. The answer is what the user is
+        # waiting for; the title is cosmetic and can arrive after it. Awaited before `done`
+        # it cost the turn its own latency, and on a slow free model it exceeded its budget
+        # and fell back — measured in production, where the model is slower than locally.
         yield StreamEvent(
             kind=StreamEventKind.DONE,
             answer=answer,
             conversation_id=conversation.id,
-            title=title,
         )
+
+        title = await self._name_if_untitled(context, conversation, text)
+        if title is not None:
+            yield StreamEvent(
+                kind=StreamEventKind.TITLE,
+                text=title,
+                conversation_id=conversation.id,
+            )
 
     async def _name_if_untitled(
         self,

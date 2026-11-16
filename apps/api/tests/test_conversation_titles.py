@@ -110,23 +110,26 @@ async def test_naming_runs_once_not_once_per_turn() -> None:
     assert len(namer.calls) == 1
 
 
-async def test_streaming_has_the_title_before_done() -> None:
-    """The client reloads its sidebar on `done`, so the title must exist by then."""
+async def test_streaming_sends_the_title_as_its_own_event_after_done() -> None:
+    """The answer must not wait for the title; the title must still arrive."""
     namer = StubNamer("بیمه‌نامه‌های فعال من")
     service, repository = _service(namer=namer)
 
-    conversation_id = ""
+    order: list[str] = []
     announced: str | None = None
+    conversation_id = ""
     async for event in service.stream_message(context=ALICE, message=QUESTION):
+        order.append(event.kind.value)
         if event.kind.value == "done":
             conversation_id = event.conversation_id or ""
-            announced = event.title
-            # Read while still inside the generator: this is exactly what the client's
-            # refetch does one round-trip later.
-            assert await _title_of(repository, conversation_id) == "بیمه‌نامه‌های فعال من"
+        if event.kind.value == "title":
+            announced = event.text
 
     assert conversation_id
+    # `done` first, so the answer settles without waiting on a second model call.
+    assert order.index("done") < order.index("title")
     assert announced == "بیمه‌نامه‌های فعال من"
+    assert await _title_of(repository, conversation_id) == "بیمه‌نامه‌های فعال من"
 
 
 @pytest.mark.parametrize(

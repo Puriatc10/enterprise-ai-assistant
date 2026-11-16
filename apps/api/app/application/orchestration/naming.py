@@ -28,7 +28,7 @@ TITLE_SYSTEM_PROMPT = (
 
 MAX_TITLE_LENGTH = 60
 MAX_TITLE_WORDS = 8
-DEFAULT_TITLE_TIMEOUT_SECONDS = 6.0
+DEFAULT_TITLE_TIMEOUT_SECONDS = 15.0
 #: Enough for a six-word Persian title and nothing else. A model that wants to explain
 #: itself gets cut off, which `clean_title` then rejects.
 #:

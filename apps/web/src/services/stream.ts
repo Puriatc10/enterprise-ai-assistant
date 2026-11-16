@@ -24,6 +24,11 @@ export interface StreamHandlers {
    * after an `error` event and never called at all if the turn was aborted.
    */
   onDone: (answer: string, conversationId: string, title: string | null) => void;
+  /**
+   * The turn named the conversation. Arrives *after* `onDone`, which is why the stream is
+   * read to its end rather than stopped at `done`.
+   */
+  onTitle?: (title: string) => void;
 }
 
 /** Persian copy for a failure that carried no readable envelope. */
@@ -179,13 +184,21 @@ function handleFrame(frame: SseFrame, handlers: StreamHandlers, state: FrameStat
 
   switch (kind) {
     case "token": {
+      // Tokens after `done` belong to nothing the user is reading: the answer is settled.
+      if (state.done) return;
       const text = typeof payload.text === "string" ? payload.text : "";
       if (text.length > 0) handlers.onToken(text);
       return;
     }
     case "tool": {
+      if (state.done) return;
       const tool = readToolUsage(payload.tool);
       if (tool !== null) handlers.onTool(tool);
+      return;
+    }
+    case "title": {
+      const title = typeof payload.text === "string" ? payload.text.trim() : "";
+      if (title.length > 0) handlers.onTitle?.(title);
       return;
     }
     case "done": {
@@ -311,25 +324,26 @@ export async function streamMessage(
   let buffer = "";
 
   try {
-    while (!state.done) {
+    // Read until the server closes the stream rather than stopping at `done`: a thread's
+    // title arrives as its own event just after the answer, and stopping early would drop
+    // it. Late tokens are ignored by `handleFrame`, so this cannot corrupt the answer.
+    for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       buffer = drainFrames(buffer, handlers, state);
     }
 
-    if (!state.done) {
-      // Flush the decoder's tail, then treat a leftover frame with no trailing
-      // blank line as a real event: the socket can close immediately after the
-      // last byte, and dropping that frame would lose the answer itself.
-      buffer += decoder.decode();
-      buffer = drainFrames(buffer, handlers, state);
+    // Flush the decoder's tail, then treat a leftover frame with no trailing blank line as
+    // a real event: the socket can close immediately after the last byte, and dropping that
+    // frame would lose the answer itself.
+    buffer += decoder.decode();
+    buffer = drainFrames(buffer, handlers, state);
 
-      const tail = buffer.trim();
-      if (!state.done && tail.length > 0) {
-        const frame = parseFrame(tail);
-        if (frame !== null) handleFrame(frame, handlers, state);
-      }
+    const tail = buffer.trim();
+    if (tail.length > 0) {
+      const frame = parseFrame(tail);
+      if (frame !== null) handleFrame(frame, handlers, state);
     }
   } catch (error) {
     if (isAbortError(error) || signal?.aborted) return;
